@@ -1,0 +1,14 @@
+{
+  "name": "matis-server",
+  "version": "0.0.1",
+  "description": "Server API of Matis",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:Matis-apps/matis-server.git"
+  },
+  "dependencies": {}
+}
