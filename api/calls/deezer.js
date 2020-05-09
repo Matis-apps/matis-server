@@ -165,6 +165,60 @@ async function getArtist(id) {
   })
 }
 
+
+/**
+ * getArtist Return the artist content with its albums
+ * @params id
+ */
+async function getRelatedArtists(id) {
+
+  var artists = [];
+  var callError;
+  var retry = 10;
+
+  // get the general data of the artist
+  do {
+    const options = {
+        hostname: 'api.deezer.com',
+        path: '/artist/'+id+'/related',
+        method: 'GET',
+        headers: {
+          'content-type': 'text/json'
+        },
+      };
+
+    const call = await httpCall(options) // await for the response
+      .catch(err => { // catch if error
+        callError = err;
+        retry--;
+      });
+
+    //console.log(call)
+
+    if(call) {
+      await Promise
+        .all(call.data.map(a => getArtist(a.id)))
+        .then(results => {
+          results.forEach((a) => {
+            if (a.albums && a.albums.data.length > 0) {            
+              artists.push(formatArtistToFeed(a));
+            }
+          })
+        });
+    } else {
+      await sleep(1500);
+    }
+  } while (!artists && retry > 0); // loop while there is another page
+  
+  return new Promise((resolve, reject) => {
+    if (artists) {
+      resolve(artists);
+    } else {
+      reject(callError);
+    }
+  })
+}
+
 /**
  * getAlbums Return the albums loved by a user
  * @params user_id
@@ -216,6 +270,49 @@ async function getAlbums(user_id = 'me', access_token = null) {
 
     recursive()
   });
+}
+
+/**
+ * getArtist Return the artist content with its albums
+ * @params id
+ */
+async function getAlbum(id) {
+
+  var album;
+  var callError;
+  var retry = 10;
+
+  // get the general data of the artist
+  do {
+    const options = {
+        hostname: 'api.deezer.com',
+        path: '/album/'+id,
+        method: 'GET',
+        headers: {
+          'content-type': 'text/json'
+        },
+      };
+
+    const call = await httpCall(options) // await for the response
+      .catch(err => { // catch if error
+        callError = err;
+        retry--;
+      });
+
+    if(call) {
+      album = call; // push the data in the response
+    } else {
+      await sleep(1500);
+    }
+  } while (!album && retry > 0); // loop while there is another page
+  
+  return new Promise((resolve, reject) => {
+    if (album) {
+      resolve(album);
+    } else {
+      reject(callError);
+    }
+  })
 }
 
 /**
@@ -374,6 +471,30 @@ async function getReleases(user_id, access_token = null) {
   });
 }
 
+/*
+async function getReleaseContent(obj, id) {
+  var release;
+
+  switch(obj) {
+    case 1: // artist last album
+      const tracklist = await getPlaylists(user_id, access_token)
+        .catch(err => callError = err);
+
+      if (tracklist) {
+        release = tracklist.data.tracks.data;
+      }
+
+      break;
+    case 2: // playlist
+
+      break;
+    case 3: // album
+
+      break;
+  }
+}
+*/
+
 function formatArtistToFeed(artist){
   return {
     _obj: 1,
@@ -455,6 +576,7 @@ function timestampToDate(seconds) {
 }
 
 exports.getArtist = getArtist;
+exports.getRelatedArtists = getRelatedArtists;
 exports.getArtists = getArtists;
 exports.getAlbums = getAlbums;
 exports.getPlaylists = getPlaylists;
