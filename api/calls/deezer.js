@@ -2,18 +2,17 @@ const http = require('http');
 const sleep = require('await-sleep');
 const merror = require('../../merror');
 
-const call_limit = 10; // Limit of items to retrieve
+const call_limit = 100; // Limit of items to retrieve
 
 /**
- * httpCall return the artists grouped due to pagination. The function can be used recursively.
- * @params integer index offset for the pagination
- * @params integer retry count the number of retries allowed after an error
+ * httpCall Call the API end parse de response
+ * @params options
  */
 const httpCall = async function(options) {
   return new Promise((resolve, reject) => {
     var req = http.get(options, response => {
       if (response.statusCode === 200) {
-        // Event when receive the data
+        // Event when receiving the data
         var responseBody = "";
         response.on('data', function(chunck) { responseBody += chunck });
 
@@ -21,11 +20,11 @@ const httpCall = async function(options) {
         response.on('end', () => {
           try {
             let json = JSON.parse(responseBody)
-            if (!json) {
+            if (!json) { // json is undefined or null
               reject(merror.error("Unvalid json", 500));
-            } else if (json.error) {
+            } else if (json.error) { // json has an error (set by Deezer)
               reject(merror.error(json.error.message, json.error.code));
-            } else { 
+            } else { // otherwise, json is ok
               resolve(json)
             }
           } catch(e) {
@@ -49,13 +48,16 @@ const httpCall = async function(options) {
 async function getArtists(user_id = 'me', access_token = null) {
 
   var artists = [];
-  var callError;
-  var index = 0;
-  var retry = 10;
-  var total = 0;
-  
-  do {
-    const options = {
+    
+  return new Promise((resolve, reject) => {
+    /**
+     * recursive Fill the artists array and handle the pagination recursively
+     * @params index
+     * @params retry
+     */
+    let recursive = async function (index = 0, retry = 10) {
+      // Configuration of the http request
+      const options = {
         hostname: 'api.deezer.com',
         path: '/user/'+user_id+'/artists?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
         method: 'GET',
@@ -64,40 +66,36 @@ async function getArtists(user_id = 'me', access_token = null) {
         },
       };
 
-    const call = await httpCall(options) // await for the response
-      .catch(err => { // catch if error
-        callError = err;
-        retry--;
-        if (retry === 0) { // if the retry is over
-          index+=call_limit;
-          retry=10;
-        }
-      });
+      httpCall(options)
+        .then(response => { // response is ok, push the result in array
+          Array.prototype.push.apply(artists, response.data)
+          if(response.next) { // if has a next object, keep going
+            recursive(index+call_limit)
+              .catch(() => resolve(artists)); // resolve the iterations if an error happens
+          } else { // no more page, resolve with the result
+            resolve(artists);
+          }
+        })
+        .catch(err => {
+          if (retry > 0 && err.code == 429) { // too many request and still have a retry, so wait for a delay and get back
+            setTimeout(recursive, 1500, index, retry-1);
+          } else {
+            if(artists.length == 0) { // if there's no playlist retrieved, reject with the error
+              reject(err);              
+            } else { // otherwise, best-effort mode
+              resolve(artists);
+            }
+          }
+        });
+    };
 
-    if(call) {
-      const call = await httpCall(options); // await for the response
-      Array.prototype.push.apply(artists, call.data); // push the data in the response
-      total = call.total; // retrieve the total
-      index+=call_limit; // goto the next page
-      retry=10;
-    } else {
-      await sleep(1500);
-    }
-  } while (total > index); // loop while there is another page
-  
-  return new Promise((resolve, reject) => {
-    if (artists.length > 0) {
-      resolve(artists);
-    } else {
-      reject(callError);
-    }
-  })
+    recursive()
+  });
 }
 
 /**
- * getArtists Return the artists loved by a user
- * @params user_id
- * @params access_token
+ * getArtist Return the artist content with its albums
+ * @params id
  */
 async function getArtist(id) {
 
@@ -105,6 +103,7 @@ async function getArtist(id) {
   var callError;
   var retry = 10;
 
+  // get the general data of the artist
   do {
     const options = {
         hostname: 'api.deezer.com',
@@ -128,6 +127,7 @@ async function getArtist(id) {
     }
   } while (!artist && retry > 0); // loop while there is another page
   
+  // get the albums of the artist
   if (artist) {
     var retry = 10;
 
@@ -164,7 +164,6 @@ async function getArtist(id) {
   })
 }
 
-
 /**
  * getPlaylists Return the playlists loved by a user
  * @params user_id
@@ -173,49 +172,49 @@ async function getArtist(id) {
 async function getPlaylists(user_id = 'me', access_token = null) {
 
   var playlists = [];
-  var callError;
-  var index = 0;
-  var retry = 10;
-  var total = 0;
   
-  do {
-    // Configuration of the http request
-    const options = {
-      hostname: 'api.deezer.com',
-      path: '/user/'+user_id+'/playlists?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
-      method: 'GET',
-      headers: {
-        'content-type': 'text/json'
-      },
+  return new Promise((resolve, reject) => {
+    /**
+     * recursive Fill the playlists array and handle the pagination recursively
+     * @params index
+     * @params retry
+     */
+    let recursive = async function (index = 0, retry = 10) {
+      // Configuration of the http request
+      const options = {
+        hostname: 'api.deezer.com',
+        path: '/user/'+user_id+'/playlists?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
+        method: 'GET',
+        headers: {
+          'content-type': 'text/json'
+        },
+      };
+
+      httpCall(options)
+        .then(response => { // response is ok, push the result in array
+          Array.prototype.push.apply(playlists, response.data)
+          if(response.next) {
+            recursive(index+call_limit)
+              .catch(() => resolve(playlists)); // resolve the iterations if an error happens
+          } else { // no more page, resolve with the result
+            resolve(playlists);
+          }
+        })
+        .catch(err => {
+          if (retry > 0 && err.code == 429) { // too many request and still have a retry, so wait for a delay and get back
+            setTimeout(recursive, 1500, index, retry-1);
+          } else {
+            if(playlists.length == 0) { // if there's no playlist retrieved, reject with the error
+              reject(err);              
+            } else { // otherwise, best-effort mode
+              resolve(playlists);
+            }
+          }
+        });
     };
 
-    const call = await httpCall(options)// await for the response
-      .catch(err => {
-        callError = err;
-        retry--;
-        if (retry === 0) {
-          index+=call_limit;
-          retry=10;
-        }
-      });
-
-    if (call) {
-      Array.prototype.push.apply(playlists, call.data); // push the data in the response
-      total = call.total; // retrieve the total
-      index+=call_limit; // goto the next page
-      retry=10;
-    }
-  } while (total > index); // loop while there is another page
-
-
-
-  return new Promise((resolve, reject) => {
-    if (playlists.length > 0) {
-      resolve(playlists);
-    } else {
-      reject(callError);
-    }
-  })
+    recursive()
+  });
 }
 
 
