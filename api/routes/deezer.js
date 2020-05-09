@@ -3,7 +3,7 @@ const router = express.Router();
 
 const deezer = require('../calls/deezer');
 
-const user_id = 16192550;
+var user_id = 16192550;
 
 router.get('/artists', (req, res, next) => {
   deezer.getArtists(user_id).then(data => {
@@ -23,8 +23,38 @@ router.get('/artist/:id', (req, res, next) => {
   }).catch(err => next(err));
 });
 
+router.get('/albums/:user_id', (req, res, next) => {
+  const user_id = req.params.user_id;
+  deezer.getAlbums(user_id).then(data => {
+    res.status(200).json({
+      'data': data,
+      'count': data.length,
+    })
+  }).catch(err => next(err));
+});
+
 router.get('/playlists', (req, res, next) => {
   deezer.getPlaylists(user_id).then(data => {
+    res.status(200).json({
+      'data': data,
+      'count': data.length,
+    })
+  }).catch(err => next(err));
+});
+
+
+router.get('/releases', (req, res, next) => {
+  deezer.getMyReleases(user_id).then(data => {
+    res.status(200).json({
+      'data': data,
+      'count': data.length,
+    })
+  }).catch(err => next(err));
+});
+
+router.get('/releases/:user_id', (req, res, next) => {
+  const user_id = req.params.user_id;
+  deezer.getReleases(user_id).then(data => {
     res.status(200).json({
       'data': data,
       'count': data.length,

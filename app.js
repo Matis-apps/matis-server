@@ -1,6 +1,6 @@
 const express = require('express');
 const app = express();
-const merror = require('./merror');
+const mutils = require('./mutils');
 const morgan = require('morgan');
 
 const deezerRoutes = require('./api/routes/deezer')
@@ -11,7 +11,7 @@ app.use('/deezer', deezerRoutes);
 
 // No route found, return an error
 app.use((req, res, next) => {
-  next(merror.error('Route not found', 404));
+  next(mutils.error('Route not found', 404));
 })
 
 

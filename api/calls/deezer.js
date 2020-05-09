@@ -1,6 +1,7 @@
 const http = require('http');
 const sleep = require('await-sleep');
-const merror = require('../../merror');
+const moment = require('moment');
+const mutils = require('../../mutils');
 
 const call_limit = 100; // Limit of items to retrieve
 
@@ -21,21 +22,21 @@ const httpCall = async function(options) {
           try {
             let json = JSON.parse(responseBody)
             if (!json) { // json is undefined or null
-              reject(merror.error("Unvalid json", 500));
+              reject(mutils.error("Unvalid json", 500));
             } else if (json.error) { // json has an error (set by Deezer)
-              reject(merror.error(json.error.message, json.error.code));
+              reject(mutils.error(json.error.message, json.error.code));
             } else { // otherwise, json is ok
               resolve(json)
             }
           } catch(e) {
-            reject(merror.error(e.message, 500));
+            reject(mutils.error(e.message, 500));
           }
         })
       } else {
-        reject(merror.error(e.message, response.statusCode));
+        reject(mutils.error(e.message, response.statusCode));
       }
     }).on('error', function(e) {
-      reject(merror.error(e.message, 500));
+      reject(mutils.error(e.message, 500));
     });
   })
 }
@@ -165,6 +166,59 @@ async function getArtist(id) {
 }
 
 /**
+ * getAlbums Return the albums loved by a user
+ * @params user_id
+ * @params access_token
+ */
+async function getAlbums(user_id = 'me', access_token = null) {
+
+  var albums = [];
+    
+  return new Promise((resolve, reject) => {
+    /**
+     * recursive Fill the artists array and handle the pagination recursively
+     * @params index
+     * @params retry
+     */
+    let recursive = async function (index = 0, retry = 10) {
+      // Configuration of the http request
+      const options = {
+        hostname: 'api.deezer.com',
+        path: '/user/'+user_id+'/albums?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
+        method: 'GET',
+        headers: {
+          'content-type': 'text/json'
+        },
+      };
+
+      httpCall(options)
+        .then(response => { // response is ok, push the result in array
+          Array.prototype.push.apply(albums, response.data)
+          if(response.next) { // if has a next object, keep going
+            recursive(index+call_limit)
+              .catch(() => resolve(albums)); // resolve the iterations if an error happens
+          } else { // no more page, resolve with the result
+            resolve(artists);
+          }
+        })
+        .catch(err => {
+          if (retry > 0 && err.code == 429) { // too many request and still have a retry, so wait for a delay and get back
+            setTimeout(recursive, 1500, index, retry-1);
+          } else {
+            if(albums.length == 0) { // if there's no playlist retrieved, reject with the error
+              reject(err);              
+            } else { // otherwise, best-effort mode
+              resolve(albums);
+            }
+          }
+        });
+    };
+
+    recursive()
+  });
+}
+
+/**
  * getPlaylists Return the playlists loved by a user
  * @params user_id
  * @params access_token
@@ -217,7 +271,192 @@ async function getPlaylists(user_id = 'me', access_token = null) {
   });
 }
 
+/**
+ * getMyReleases Return the releases based on the user
+ * @params user_id
+ * @params access_token
+ */
+async function getMyReleases(user_id = 'me', access_token = null) {
+  var releases = [];
+  var callError;
+
+  const artists = await getArtists(user_id, access_token)
+    .catch(err => callError = err);
+
+  if(artists) {
+    await Promise
+      .all(artists.map(a => getArtist(a.id)))
+      .then(results => {
+        results.forEach((a) => {
+          if (a.albums && a.albums.data.length > 0) {            
+            releases.push(formatArtistToFeed(a));
+          }
+        })
+      });
+  }
+
+  const playlists = await getPlaylists(user_id, access_token)
+    .catch(err => callError = err);
+
+  if(playlists) {
+    playlists.forEach(p => {
+      if(!p.is_loved_track && p.creator.id != user_id) {
+        releases.push(formatPlaylistToFeed(p));
+      }
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    if (releases.length == 0) {
+      reject(mutils.error("No content"), 200);
+    } else {
+      releases.sort((a,b) => sortLastReleases(a,b));
+      resolve(releases)
+    }
+  });
+}
+
+
+/**
+ * getMyReleases Return the releases based on the user's friend
+ * @params user_id
+ * @params access_token
+ */
+async function getReleases(user_id, access_token = null) {
+  var releases = [];
+  var callError;
+
+  const artists = await getArtists(user_id, access_token)
+    .catch(err => callError = err);
+
+  if(artists) {
+    await Promise
+      .all(artists.map(a => getArtist(a.id)))
+      .then(results => {
+        results.forEach((a) => {
+          if (a.albums && a.albums.data.length > 0) {            
+            releases.push(formatArtistToFeed(a));
+          }
+        })
+      });
+  }
+
+  const playlists = await getPlaylists(user_id, access_token)
+    .catch(err => callError = err);
+
+  if(playlists) {
+    playlists.forEach(p => {
+      releases.push(formatPlaylistToFeed(p));
+    });
+  }
+
+  const albums = await getAlbums(user_id, access_token)
+    .catch(err => callError = err);
+
+  if(albums) {
+    albums.forEach(a => {
+      let existingAlbum = releases.find(r => {
+        return r.id == a.id && r.content_type == a.record_type;
+      });
+      if (! existingAlbum) {
+        releases.push(formatAlbumToFeed(a));
+      }
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    if (releases.length == 0) {
+      reject(mutils.error("No content"), 200);
+    } else {
+      releases.sort((a,b) => sortLastReleases(a,b));
+      resolve(releases)
+    }
+  });
+}
+
+function formatArtistToFeed(artist){
+  return {
+    _obj: 1,
+    _uid: artist.albums.data[0].record_type+'-'+artist.id+'-'+artist.albums.data[0].id,
+    // Related to the author
+    id: artist.id,
+    name: artist.name,
+    picture: artist.picture_small,
+    link: artist.link,
+    updated_at: artist.albums.data[0].release_date,
+    // Related to the content
+    content_id: artist.albums.data[0].id,
+    content_title: artist.albums.data[0].title,
+    content_type: artist.albums.data[0].record_type,
+    content_picture: artist.albums.data[0].cover_medium,
+    content_link: artist.albums.data[0].link,
+    content_last: artist.albums.data[0],
+    content_full: artist.albums,
+  };
+}
+
+function formatPlaylistToFeed(playlist) {
+  return {
+    _obj: 2,
+    _uid: playlist.type+'-'+playlist.creator.id+'-'+playlist.id,
+    // Related to the author
+    id: playlist.creator.id,
+    name: playlist.creator.name,
+    picture: null,
+    link: "https://www.deezer.com/profile/" + playlist.creator.id,
+    updated_at: playlist.time_mod ? timestampToDate(playlist.time_mod) : timestampToDate(playlist.time_add),
+    // Related to the content
+    content_id: playlist.id,
+    content_title: playlist.title,
+    content_type: playlist.type,
+    content_picture: playlist.picture_medium,
+    content_link: playlist.link,
+    content_last: playlist,
+    content_full: playlist,
+  };
+}
+
+function formatAlbumToFeed(album) {
+  return {
+    _obj: 3,
+    _uid: album.type+'-'+album.artist.id+'-'+album.id,
+    // Related to the author
+    id: album.artist.id,
+    name: album.artist.name,
+    picture: album.artist.picture_small,
+    link: "https://www.deezer.com/profile/" + album.artist.id,
+    updated_at: timestampToDate(album.time_add),
+    // Related to the content
+    content_id: album.id,
+    content_title: album.title,
+    content_type: album.record_type,
+    content_picture: album.cover_medium,
+    content_link: album.link,
+    content_last: album,
+    content_full: album,
+  };
+}
+
+function sortLastReleases ( a, b ) {
+  if ( a.content_full.length == 0 ) return 1;
+  if ( b.content_full.length == 0 ) return -1;
+
+  if ( a.updated_at > b.updated_at ) {
+    return -1;
+  }
+  if ( a.updated_at < b.updated_at ) {
+    return 1;
+  }
+  return 0;
+}
+
+function timestampToDate(seconds) {
+  return moment.unix(seconds).format("YYYY-MM-DD");
+}
 
 exports.getArtist = getArtist;
 exports.getArtists = getArtists;
+exports.getAlbums = getAlbums;
 exports.getPlaylists = getPlaylists;
+exports.getMyReleases = getMyReleases;
+exports.getReleases = getReleases;

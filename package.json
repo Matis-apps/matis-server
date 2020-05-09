@@ -13,6 +13,7 @@
   "dependencies": {
     "await-sleep": "0.0.1",
     "express": "^4.17.1",
+    "moment": "^2.25.3",
     "morgan": "^1.10.0"
   },
   "devDependencies": {
