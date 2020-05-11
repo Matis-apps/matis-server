@@ -13,3 +13,17 @@ Web server to retrieve the API's content.
     />
   </a>
 </p>
+
+## Endpoints
+
+### [Deezer services](api/routes/deezer.js)
+* Get current user's loved artists : `GET /deezer/artists`
+* Get artist content : `GET /deezer/artist/:id`
+* Get related artist content : `GET /deezer/artist/:id/related`
+* Get user's loved albums : `GET /deezer/albums/:user_id`
+* Get user's playlists : `GET /deezer/playlists`
+* Get current user's last releases : `GET /deezer/releases`
+* Get user's last releases : `GET /deezer/releases/:user_id`
+* Get release's content : `GET /deezer/:obj/:id`
+-- obj: 1 & 2 = Album, 3: Playlist
+-- id: Depending on the obj - 1 & 2: album_id, 3: playlist_id

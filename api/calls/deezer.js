@@ -12,13 +12,13 @@ const call_limit = 100; // Limit of items to retrieve
 const httpCall = async function(options) {
   return new Promise((resolve, reject) => {
     var req = http.get(options, response => {
-      if (response.statusCode === 200) {
-        // Event when receiving the data
-        var responseBody = "";
-        response.on('data', function(chunck) { responseBody += chunck });
+      // Event when receiving the data
+      var responseBody = "";
+      response.on('data', function(chunck) { responseBody += chunck });
 
-        // Event when the request is ending
-        response.on('end', () => {
+      // Event when the request is ending
+      response.on('end', () => {
+        if (response.statusCode === 200) {
           try {
             let json = JSON.parse(responseBody)
             if (!json) { // json is undefined or null
@@ -31,10 +31,10 @@ const httpCall = async function(options) {
           } catch(e) {
             reject(mutils.error(e.message, 500));
           }
-        })
-      } else {
-        reject(mutils.error(e.message, response.statusCode));
-      }
+        } else {
+          reject(mutils.error(response, response.statusCode));
+        }
+      })
     }).on('error', function(e) {
       reject(mutils.error(e.message, 500));
     });
@@ -165,7 +165,6 @@ async function getArtist(id) {
   })
 }
 
-
 /**
  * getArtist Return the artist content with its albums
  * @params id
@@ -192,8 +191,6 @@ async function getRelatedArtists(id) {
         callError = err;
         retry--;
       });
-
-    //console.log(call)
 
     if(call) {
       await Promise
@@ -316,6 +313,49 @@ async function getAlbum(id) {
 }
 
 /**
+ * getArtist Return the artist content with its albums
+ * @params id
+ */
+async function getAlbumContent(id) {
+
+  var content;
+  var callError;
+  var retry = 10;
+
+  // get the general data of the artist
+  do {
+    const options = {
+        hostname: 'api.deezer.com',
+        path: '/album/'+id+'/tracks',
+        method: 'GET',
+        headers: {
+          'content-type': 'text/json'
+        },
+      };
+
+    const call = await httpCall(options) // await for the response
+      .catch(err => { // catch if error
+        callError = err;
+        retry--;
+      });
+
+    if(call) {
+      content = call; // push the data in the response
+    } else {
+      await sleep(1500);
+    }
+  } while (!content && retry > 0); // loop while there is another page
+  
+  return new Promise((resolve, reject) => {
+    if (content) {
+      resolve(content);
+    } else {
+      reject(callError);
+    }
+  })
+}
+
+/**
  * getPlaylists Return the playlists loved by a user
  * @params user_id
  * @params access_token
@@ -366,6 +406,50 @@ async function getPlaylists(user_id = 'me', access_token = null) {
 
     recursive()
   });
+}
+
+
+/**
+ * getPlaylistContent Return the artist content with its albums
+ * @params id
+ */
+async function getPlaylistContent(id) {
+
+  var content;
+  var callError;
+  var retry = 10;
+
+  // get the general data of the artist
+  do {
+    const options = {
+        hostname: 'api.deezer.com',
+        path: '/playlist/'+id,
+        method: 'GET',
+        headers: {
+          'content-type': 'text/json'
+        },
+      };
+
+    const call = await httpCall(options) // await for the response
+      .catch(err => { // catch if error
+        callError = err;
+        retry--;
+      });
+
+    if(call) {
+      content = call; // push the data in the response
+    } else {
+      await sleep(1500);
+    }
+  } while (!content && retry > 0); // loop while there is another page
+  
+  return new Promise((resolve, reject) => {
+    if (content) {
+      resolve(content);
+    } else {
+      reject(callError);
+    }
+  })
 }
 
 /**
@@ -471,29 +555,36 @@ async function getReleases(user_id, access_token = null) {
   });
 }
 
-/*
 async function getReleaseContent(obj, id) {
-  var release;
+  return new Promise((resolve, reject) => {
+  
+    console.log('obj= '+obj+' id= '+id)
 
-  switch(obj) {
-    case 1: // artist last album
-      const tracklist = await getPlaylists(user_id, access_token)
-        .catch(err => callError = err);
+    if(obj === '1' || obj === '2') {
+      // retrieve the general content
+      const promise = getAlbum(id)
+        .then((response) => {
+          return response;
+        }).catch(err => reject(err));
 
-      if (tracklist) {
-        release = tracklist.data.tracks.data;
-      }
-
-      break;
-    case 2: // playlist
-
-      break;
-    case 3: // album
-
-      break;
-  }
+      // retrieve the related artists
+      promise.then((release) => {
+        getRelatedArtists(release.artist.id).then((response) => {
+          release.related = response;
+          release.related.sort((a,b) => sortLastReleases(a,b));
+          resolve(release);
+        })
+      }).catch(err => reject(err));
+    } else if (obj === '3') {
+      getPlaylistContent(id)
+        .then((response) => {
+          resolve(response);          
+        }).catch(err => reject(err));
+    } else {
+      reject(mutils.error('No content', 200))
+    }
+  });
 }
-*/
 
 function formatArtistToFeed(artist){
   return {
@@ -516,9 +607,30 @@ function formatArtistToFeed(artist){
   };
 }
 
-function formatPlaylistToFeed(playlist) {
+function formatAlbumToFeed(album) {
   return {
     _obj: 2,
+    _uid: album.record_type+'-'+album.artist.id+'-'+album.id,
+    // Related to the author
+    id: album.artist.id,
+    name: album.artist.name,
+    picture: album.artist.picture_small,
+    link: "https://www.deezer.com/profile/" + album.artist.id,
+    updated_at: timestampToDate(album.time_add),
+    // Related to the content
+    content_id: album.id,
+    content_title: album.title,
+    content_type: album.record_type,
+    content_picture: album.cover_medium,
+    content_link: album.link,
+    content_last: album,
+    content_full: album,
+  };
+}
+
+function formatPlaylistToFeed(playlist) {
+  return {
+    _obj: 3,
     _uid: playlist.type+'-'+playlist.creator.id+'-'+playlist.id,
     // Related to the author
     id: playlist.creator.id,
@@ -534,27 +646,6 @@ function formatPlaylistToFeed(playlist) {
     content_link: playlist.link,
     content_last: playlist,
     content_full: playlist,
-  };
-}
-
-function formatAlbumToFeed(album) {
-  return {
-    _obj: 3,
-    _uid: album.type+'-'+album.artist.id+'-'+album.id,
-    // Related to the author
-    id: album.artist.id,
-    name: album.artist.name,
-    picture: album.artist.picture_small,
-    link: "https://www.deezer.com/profile/" + album.artist.id,
-    updated_at: timestampToDate(album.time_add),
-    // Related to the content
-    content_id: album.id,
-    content_title: album.title,
-    content_type: album.record_type,
-    content_picture: album.cover_medium,
-    content_link: album.link,
-    content_last: album,
-    content_full: album,
   };
 }
 
@@ -582,3 +673,5 @@ exports.getAlbums = getAlbums;
 exports.getPlaylists = getPlaylists;
 exports.getMyReleases = getMyReleases;
 exports.getReleases = getReleases;
+exports.getReleaseContent = getReleaseContent;
+
