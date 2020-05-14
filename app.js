@@ -11,7 +11,7 @@ app.use('/deezer', deezerRoutes);
 
 // No route found, return an error
 app.use((req, res, next) => {
-  next(mutils.error('Route not found', 404));
+  next(mutils.error('Route '+req.originalUrl+' not found', 404));
 })
 
 

@@ -73,11 +73,11 @@ router.get('/releases/:user_id', (req, res, next) => {
   }).catch(err => next(err));
 });
 
-router.get('/release/:obj([0-9]+)/:id([0-9]+)', (req, res, next) => {
+router.get('/release/:obj([a-z]+)/:id([0-9]+)', (req, res, next) => {
   const obj = req.params.obj;
   const id = req.params.id;
   console.log('obj= '+obj+' id= '+id)
-  
+
   deezer.getReleaseContent(obj, id).then(data => {
     res.status(200).json({
       'data': data,

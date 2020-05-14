@@ -42,11 +42,11 @@ const httpCall = async function(options) {
 }
 
 /**
- * getArtists Return the artists loved by a user
+ * fetchArtists
  * @params user_id
  * @params access_token
  */
-async function getArtists(user_id = 'me', access_token = null) {
+async function fetchArtists(user_id, access_token) {
 
   var artists = [];
     
@@ -78,7 +78,7 @@ async function getArtists(user_id = 'me', access_token = null) {
           }
         })
         .catch(err => {
-          if (retry > 0 && err.code == 429) { // too many request and still have a retry, so wait for a delay and get back
+          if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
             setTimeout(recursive, 1500, index, retry-1);
           } else {
             if(artists.length == 0) { // if there's no playlist retrieved, reject with the error
@@ -95,10 +95,25 @@ async function getArtists(user_id = 'me', access_token = null) {
 }
 
 /**
- * getArtist Return the artist content with its albums
+ * getArtists
+ * @params user_id
+ * @params access_token
+ */
+async function getArtists(user_id = 'me', access_token = null) {
+  return new Promise((resolve, reject) => {
+    fetchArtists(user_id, access_token)
+      .then(result => {
+        resolve(result.map(a => formatArtistToStandard(a)))
+      })
+      .catch(err => reject(err));
+  });
+}
+
+/**
+ * fetchArtist
  * @params id
  */
-async function getArtist(id) {
+async function fetchArtist(id) {
 
   var artist;
   var callError;
@@ -166,7 +181,22 @@ async function getArtist(id) {
 }
 
 /**
- * getArtist Return the artist content with its albums
+ * getArtist
+ * @params id
+ */
+async function getArtist(id) {
+  return new Promise((resolve, reject) => {
+    fetchArtist(id)
+      .then(result => {
+        resolve(formatArtistToStandard(result))
+      })
+      .catch(err => reject(err));
+  });
+}
+
+
+/**
+ * getRelatedArtists
  * @params id
  */
 async function getRelatedArtists(id) {
@@ -194,10 +224,10 @@ async function getRelatedArtists(id) {
 
     if(call) {
       await Promise
-        .all(call.data.map(a => getArtist(a.id)))
+        .all(call.data.map(a => fetchArtist(a.id)))
         .then(results => {
           results.forEach((a) => {
-            if (a.albums && a.albums.data.length > 0) {            
+            if (a.albums && a.albums.data && a.albums.data.length > 0) {            
               artists.push(formatArtistToFeed(a));
             }
           })
@@ -217,11 +247,11 @@ async function getRelatedArtists(id) {
 }
 
 /**
- * getAlbums Return the albums loved by a user
+ * fetchAlbums
  * @params user_id
  * @params access_token
  */
-async function getAlbums(user_id = 'me', access_token = null) {
+async function fetchAlbums(user_id = 'me', access_token = null) {
 
   var albums = [];
     
@@ -253,7 +283,7 @@ async function getAlbums(user_id = 'me', access_token = null) {
           }
         })
         .catch(err => {
-          if (retry > 0 && err.code == 429) { // too many request and still have a retry, so wait for a delay and get back
+          if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
             setTimeout(recursive, 1500, index, retry-1);
           } else {
             if(albums.length == 0) { // if there's no playlist retrieved, reject with the error
@@ -270,7 +300,23 @@ async function getAlbums(user_id = 'me', access_token = null) {
 }
 
 /**
- * getArtist Return the artist content with its albums
+ * getAlbums
+ * @params user_id
+ * @params access_token
+ */
+async function getAlbums(user_id = 'me', access_token = null) {
+  return new Promise((resolve, reject) => {
+    fetchAlbums(user_id, access_token)
+      .then(result => {
+        console.log(result.map(a => formatAlbumToFeed(a)))
+        resolve(result.map(a => formatAlbumToFeed(a)))
+      })
+      .catch(err => reject(err));
+  });
+}
+
+/**
+ * getAlbum
  * @params id
  */
 async function getAlbum(id) {
@@ -313,54 +359,11 @@ async function getAlbum(id) {
 }
 
 /**
- * getArtist Return the artist content with its albums
- * @params id
- */
-async function getAlbumContent(id) {
-
-  var content;
-  var callError;
-  var retry = 10;
-
-  // get the general data of the artist
-  do {
-    const options = {
-        hostname: 'api.deezer.com',
-        path: '/album/'+id+'/tracks',
-        method: 'GET',
-        headers: {
-          'content-type': 'text/json'
-        },
-      };
-
-    const call = await httpCall(options) // await for the response
-      .catch(err => { // catch if error
-        callError = err;
-        retry--;
-      });
-
-    if(call) {
-      content = call; // push the data in the response
-    } else {
-      await sleep(1500);
-    }
-  } while (!content && retry > 0); // loop while there is another page
-  
-  return new Promise((resolve, reject) => {
-    if (content) {
-      resolve(content);
-    } else {
-      reject(callError);
-    }
-  })
-}
-
-/**
- * getPlaylists Return the playlists loved by a user
+ * fetchPlaylists
  * @params user_id
  * @params access_token
  */
-async function getPlaylists(user_id = 'me', access_token = null) {
+async function fetchPlaylists(user_id = 'me', access_token = null) {
 
   var playlists = [];
   
@@ -392,7 +395,7 @@ async function getPlaylists(user_id = 'me', access_token = null) {
           }
         })
         .catch(err => {
-          if (retry > 0 && err.code == 429) { // too many request and still have a retry, so wait for a delay and get back
+          if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
             setTimeout(recursive, 1500, index, retry-1);
           } else {
             if(playlists.length == 0) { // if there's no playlist retrieved, reject with the error
@@ -407,7 +410,6 @@ async function getPlaylists(user_id = 'me', access_token = null) {
     recursive()
   });
 }
-
 
 /**
  * getPlaylistContent Return the artist content with its albums
@@ -453,7 +455,22 @@ async function getPlaylistContent(id) {
 }
 
 /**
- * getMyReleases Return the releases based on the user
+ * getPlaylists
+ * @params user_id
+ * @params access_token
+ */
+async function getPlaylists(user_id = 'me', access_token = null) {
+  return new Promise((resolve, reject) => {
+    fetchPlaylists(user_id, access_token)
+      .then(result => {
+        resolve(result.map(p => formatPlaylistToStandard(p)))
+      })
+      .catch(err => reject(err));
+  });
+}
+
+/**
+ * getMyReleases
  * @params user_id
  * @params access_token
  */
@@ -461,24 +478,20 @@ async function getMyReleases(user_id = 'me', access_token = null) {
   var releases = [];
   var callError;
 
-  const artists = await getArtists(user_id, access_token)
-    .catch(err => callError = err);
-
+  const artists = await fetchArtists(user_id, access_token).catch(err => callError = err);
   if(artists) {
     await Promise
-      .all(artists.map(a => getArtist(a.id)))
+      .all(artists.map(a => fetchArtist(a.id)))
       .then(results => {
         results.forEach((a) => {
-          if (a.albums && a.albums.data.length > 0) {            
+          if (a.albums && a.albums.total > 0) {            
             releases.push(formatArtistToFeed(a));
           }
         })
       });
   }
 
-  const playlists = await getPlaylists(user_id, access_token)
-    .catch(err => callError = err);
-
+  const playlists = await fetchPlaylists(user_id, access_token).catch(err => callError = err);
   if(playlists) {
     playlists.forEach(p => {
       if(!p.is_loved_track && p.creator.id != user_id) {
@@ -499,7 +512,7 @@ async function getMyReleases(user_id = 'me', access_token = null) {
 
 
 /**
- * getMyReleases Return the releases based on the user's friend
+ * getReleases
  * @params user_id
  * @params access_token
  */
@@ -507,12 +520,11 @@ async function getReleases(user_id, access_token = null) {
   var releases = [];
   var callError;
 
-  const artists = await getArtists(user_id, access_token)
-    .catch(err => callError = err);
-
+  const artists = await fetchArtists(user_id, access_token).catch(err => callError = err);
+  console.log(callError)
   if(artists) {
     await Promise
-      .all(artists.map(a => getArtist(a.id)))
+      .all(artists.map(a => fetchArtist(a.id)))
       .then(results => {
         results.forEach((a) => {
           if (a.albums && a.albums.data.length > 0) {            
@@ -522,22 +534,20 @@ async function getReleases(user_id, access_token = null) {
       });
   }
 
-  const playlists = await getPlaylists(user_id, access_token)
-    .catch(err => callError = err);
-
+  const playlists = await fetchPlaylists(user_id, access_token).catch(err => callError = err);
+  console.log(callError)
   if(playlists) {
     playlists.forEach(p => {
       releases.push(formatPlaylistToFeed(p));
     });
   }
 
-  const albums = await getAlbums(user_id, access_token)
-    .catch(err => callError = err);
-
+  const albums = await fetchAlbums(user_id, access_token).catch(err => callError = err);
+  console.log(callError)
   if(albums) {
     albums.forEach(a => {
       let existingAlbum = releases.find(r => {
-        return r.id == a.id && r.content_type == a.record_type;
+        return r.id == a.id && r.type == a.record_type;
       });
       if (! existingAlbum) {
         releases.push(formatAlbumToFeed(a));
@@ -555,30 +565,32 @@ async function getReleases(user_id, access_token = null) {
   });
 }
 
+/**
+ * getReleaseContent
+ * @params obj
+ * @params id
+ */
 async function getReleaseContent(obj, id) {
   return new Promise((resolve, reject) => {
-  
-    console.log('obj= '+obj+' id= '+id)
-
-    if(obj === '1' || obj === '2') {
+    if(obj === 'album') {
       // retrieve the general content
       const promise = getAlbum(id)
         .then((response) => {
-          return response;
+          return formatAlbumToFeed(response);
         }).catch(err => reject(err));
 
       // retrieve the related artists
       promise.then((release) => {
-        getRelatedArtists(release.artist.id).then((response) => {
+        getRelatedArtists(release.author.id).then((response) => {
           release.related = response;
           release.related.sort((a,b) => sortLastReleases(a,b));
           resolve(release);
         })
       }).catch(err => reject(err));
-    } else if (obj === '3') {
+    } else if (obj === 'playlist') {
       getPlaylistContent(id)
-        .then((response) => {
-          resolve(response);          
+        .then((response) => {       
+          resolve(formatPlaylistToFeed(response));          
         }).catch(err => reject(err));
     } else {
       reject(mutils.error('No content', 200))
@@ -586,77 +598,159 @@ async function getReleaseContent(obj, id) {
   });
 }
 
-function formatArtistToFeed(artist){
+////////////////////////
+// FORMAT TO STANDARD //
+////////////////////////
+function formatArtistToStandard(artist){
   return {
-    _obj: 1,
-    _uid: artist.albums.data[0].record_type+'-'+artist.id+'-'+artist.albums.data[0].id,
+    _obj: 'artist',
+    _uid: 'deezer-'+artist.type+'-'+artist.id,
     // Related to the author
     id: artist.id,
     name: artist.name,
-    picture: artist.picture_small,
-    link: artist.link,
-    updated_at: artist.albums.data[0].release_date,
+    picture: artist.picture ? artist.picture : null,
+    link: artist.link ? artist.link : "https://www.deezer.com/artist/"+artist.id,
+    albums: artist.albums ? artist.albums.data.map(a => formatAlbumToStandard(a)) : null,
+    nb_albums: artist.nb_album ? artist.nb_album : null,
+    nb_fans: artist.nb_fan ? artist.nb_fan : null,
+    added_at: artist.time_add ? timestampToDate(artist.time_add) : null,
+  };
+}
+
+function formatAlbumToStandard(album){
+  return {
+    _obj: 'album',
+    _uid: 'deezer-'+album.record_type+'-'+album.id,
+    // Related to the author
+    id: album.id,
+    name: album.title,
+    picture: album.cover,
+    link: album.link,
+    updated_at: album.release_date,
+    added_at: album.time_add ? timestampToDate(album.time_add) : null,
+  };
+}
+
+function formatPlaylistToStandard(playlist){
+  return {
+    _obj: 'playlist',
+    _uid: 'deezer-'+playlist.type+'-'+playlist.id,
+    // Related to the author
+    id: playlist.id,
+    name: playlist.title,
+    description: playlist.description,
+    picture: playlist.picture,
+    link: playlist.link,
+    updated_at: playlist.time_mod ? timestampToDate(playlist.time_mod) : null,
+    added_at: playlist.time_add ? timestampToDate(playlist.time_add) : null,
+  };
+}
+
+function formatTrackToStandard(track){
+  return {
+    _obj: 'track',
+    _uid: 'deezer-'+track.type,
+    // Related to the author
+    id: track.id,
+    name: track.title,
+    link: track.link,
+    preview: track.preview,
+    duration: track.duration ? timestampToTime(track.duration) : null,
+    artist: formatArtistToStandard(track.artist)
+  };
+}
+
+//////////////////////////////
+// FORMAT TO FEED (RELEASE) //
+//////////////////////////////
+function formatArtistToFeed(artist){
+  return {
+    _obj: 'album',
+    _uid: 'deezer-'+artist.albums.data[0].record_type+'-'+artist.id+'-'+artist.albums.data[0].id,
+    // Related to the author
+    author: {
+      id: artist.id,
+      name: artist.name,
+      picture: artist.picture_small,
+      link: artist.link,
+      added_at: artist.time_add ? timestampToDate(artist.time_add) : null,
+    },
     // Related to the content
-    content_id: artist.albums.data[0].id,
-    content_title: artist.albums.data[0].title,
-    content_type: artist.albums.data[0].record_type,
-    content_picture: artist.albums.data[0].cover_medium,
-    content_link: artist.albums.data[0].link,
-    content_last: artist.albums.data[0],
-    content_full: artist.albums,
+    content: {
+      id: artist.albums.data[0].id,
+      title: artist.albums.data[0].title,
+      type: artist.albums.data[0].record_type,
+      picture: artist.albums.data[0].cover_medium,
+      link: artist.albums.data[0].link,
+      updated_at: artist.albums.data[0].release_date,
+      last: artist.albums.data[0],
+    }
   };
 }
 
 function formatAlbumToFeed(album) {
   return {
-    _obj: 2,
-    _uid: album.record_type+'-'+album.artist.id+'-'+album.id,
+    _obj: 'album',
+    _uid: 'deezer-'+album.record_type+'-'+album.artist.id+'-'+album.id,
     // Related to the author
-    id: album.artist.id,
-    name: album.artist.name,
-    picture: album.artist.picture_small,
-    link: "https://www.deezer.com/profile/" + album.artist.id,
-    updated_at: timestampToDate(album.time_add),
+    author: {
+      id: album.artist.id,
+      name: album.artist.name,
+      picture: album.artist.picture_small,
+      link: "https://www.deezer.com/profile/" + album.artist.id,
+      added_at: album.time_add ? timestampToDate(album.time_add) : null,
+    },
     // Related to the content
-    content_id: album.id,
-    content_title: album.title,
-    content_type: album.record_type,
-    content_picture: album.cover_medium,
-    content_link: album.link,
-    content_last: album,
-    content_full: album,
+    content: {
+      id: album.id,
+      title: album.title,
+      type: album.record_type,
+      picture: album.cover_medium,
+      link: album.link,
+      updated_at: album.release_date,
+      tracks: album.tracks ? album.tracks.data.map(t => formatTrackToStandard(t)) : null,
+      last: album,
+    },
   };
 }
 
 function formatPlaylistToFeed(playlist) {
   return {
-    _obj: 3,
-    _uid: playlist.type+'-'+playlist.creator.id+'-'+playlist.id,
+    _obj: 'playlist',
+    _uid: 'deezer-'+playlist.type+'-'+playlist.creator.id+'-'+playlist.id,
     // Related to the author
-    id: playlist.creator.id,
-    name: playlist.creator.name,
-    picture: null,
-    link: "https://www.deezer.com/profile/" + playlist.creator.id,
-    updated_at: playlist.time_mod ? timestampToDate(playlist.time_mod) : timestampToDate(playlist.time_add),
+    author: {
+      id: playlist.creator.id,
+      name: playlist.creator.name,
+      picture: null,
+      link: "https://www.deezer.com/profile/" + playlist.creator.id,
+      added_at: playlist.time_add ? timestampToDate(playlist.time_add) : null, 
+    },
     // Related to the content
-    content_id: playlist.id,
-    content_title: playlist.title,
-    content_type: playlist.type,
-    content_picture: playlist.picture_medium,
-    content_link: playlist.link,
-    content_last: playlist,
-    content_full: playlist,
+    content: {
+      id: playlist.id,
+      title: playlist.title,
+      type: playlist.type,
+      picture: playlist.picture_medium,
+      link: playlist.link,
+      updated_at: playlist.time_mod ? timestampToDate(playlist.time_mod) : timestampToDate(playlist.time_add), 
+      tracks: playlist.tracks ? playlist.tracks.data.map(t => formatTrackToStandard(t)) : null,
+      last: playlist,
+    },
   };
 }
 
+///////////////
+// UTILITIES //
+///////////////
 function sortLastReleases ( a, b ) {
-  if ( a.content_full.length == 0 ) return 1;
-  if ( b.content_full.length == 0 ) return -1;
+  if (! a.content.updated_at ) return 1;
+  if (! b.content.updated_at ) return -1;
 
-  if ( a.updated_at > b.updated_at ) {
+  if ( a.content.updated_at > b.content.updated_at ) {
     return -1;
   }
-  if ( a.updated_at < b.updated_at ) {
+  if ( a.content.updated_at < b.content.updated_at ) {
     return 1;
   }
   return 0;
@@ -666,12 +760,15 @@ function timestampToDate(seconds) {
   return moment.unix(seconds).format("YYYY-MM-DD");
 }
 
-exports.getArtist = getArtist;
-exports.getRelatedArtists = getRelatedArtists;
+function timestampToTime(seconds) {
+  return moment.unix(seconds).format("mm:ss");
+}
+
 exports.getArtists = getArtists;
+exports.getRelatedArtists = getRelatedArtists;
+exports.getArtist = getArtist;
 exports.getAlbums = getAlbums;
 exports.getPlaylists = getPlaylists;
 exports.getMyReleases = getMyReleases;
 exports.getReleases = getReleases;
 exports.getReleaseContent = getReleaseContent;
-
