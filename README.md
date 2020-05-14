@@ -25,6 +25,5 @@ Web server to retrieve the API's content.
 * Get current user's last releases : `GET /deezer/releases`
 * Get user's last releases : `GET /deezer/releases/:user_id`
 * Get release's content : `GET /deezer/:obj/:id`
-
--- obj: album, playlist
--- id: Depending on the obj - album: album_id, playlist: playlist_id
+  * obj: album, playlist
+  * id: Depending on the obj - album: album_id, playlist: playlist_id
