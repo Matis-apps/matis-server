@@ -4,6 +4,8 @@ const moment = require('moment');
 const mutils = require('../../mutils');
 
 const call_limit = 100; // Limit of items to retrieve
+const retry_limit = 6; // Limit number of retry
+const retry_timeout = 1500; // Limit number of retry
 
 /**
  * httpCall Call the API end parse de response
@@ -56,7 +58,7 @@ async function fetchArtists(user_id, access_token) {
      * @params index
      * @params retry
      */
-    let recursive = async function (index = 0, retry = 10) {
+    let recursive = async function (index = 0, retry = retry_limit) {
       // Configuration of the http request
       const options = {
         hostname: 'api.deezer.com',
@@ -79,7 +81,7 @@ async function fetchArtists(user_id, access_token) {
         })
         .catch(err => {
           if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
-            setTimeout(recursive, 1500, index, retry-1);
+            setTimeout(recursive, retry_timeout, index, retry-1);
           } else {
             if(artists.length == 0) { // if there's no playlist retrieved, reject with the error
               reject(err);              
@@ -117,7 +119,7 @@ async function fetchArtist(id) {
 
   var artist;
   var callError;
-  var retry = 10;
+  var retry = retry_limit;
 
   // get the general data of the artist
   do {
@@ -139,7 +141,7 @@ async function fetchArtist(id) {
     if(call) {
       artist = call; // push the data in the response
     } else {
-      await sleep(1500);
+      await sleep(retry_timeout);
     }
   } while (!artist && retry > 0); // loop while there is another page
   
@@ -166,7 +168,7 @@ async function fetchArtist(id) {
       if(call) {
         artist.albums = call; // push the data in the response
       } else {
-        await sleep(1500);
+        await sleep(retry_timeout);
       }
     } while (!artist.albums && retry > 0); // loop while there is another page
   }
@@ -203,7 +205,7 @@ async function getRelatedArtists(id) {
 
   var artists = [];
   var callError;
-  var retry = 10;
+  var retry = retry_limit;
 
   // get the general data of the artist
   do {
@@ -233,7 +235,7 @@ async function getRelatedArtists(id) {
           })
         });
     } else {
-      await sleep(1500);
+      await sleep(retry_timeout);
     }
   } while (!artists && retry > 0); // loop while there is another page
   
@@ -261,7 +263,7 @@ async function fetchAlbums(user_id = 'me', access_token = null) {
      * @params index
      * @params retry
      */
-    let recursive = async function (index = 0, retry = 10) {
+    let recursive = async function (index = 0, retry = retry_limit) {
       // Configuration of the http request
       const options = {
         hostname: 'api.deezer.com',
@@ -284,7 +286,7 @@ async function fetchAlbums(user_id = 'me', access_token = null) {
         })
         .catch(err => {
           if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
-            setTimeout(recursive, 1500, index, retry-1);
+            setTimeout(recursive, retry_timeout, index, retry-1);
           } else {
             if(albums.length == 0) { // if there's no playlist retrieved, reject with the error
               reject(err);              
@@ -323,7 +325,7 @@ async function getAlbum(id) {
 
   var album;
   var callError;
-  var retry = 10;
+  var retry = retry_limit;
 
   // get the general data of the artist
   do {
@@ -345,7 +347,7 @@ async function getAlbum(id) {
     if(call) {
       album = call; // push the data in the response
     } else {
-      await sleep(1500);
+      await sleep(retry_timeout);
     }
   } while (!album && retry > 0); // loop while there is another page
   
@@ -373,7 +375,7 @@ async function fetchPlaylists(user_id = 'me', access_token = null) {
      * @params index
      * @params retry
      */
-    let recursive = async function (index = 0, retry = 10) {
+    let recursive = async function (index = 0, retry = retry_limit) {
       // Configuration of the http request
       const options = {
         hostname: 'api.deezer.com',
@@ -396,7 +398,7 @@ async function fetchPlaylists(user_id = 'me', access_token = null) {
         })
         .catch(err => {
           if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
-            setTimeout(recursive, 1500, index, retry-1);
+            setTimeout(recursive, retry_timeout, index, retry-1);
           } else {
             if(playlists.length == 0) { // if there's no playlist retrieved, reject with the error
               reject(err);              
@@ -419,7 +421,7 @@ async function getPlaylistContent(id) {
 
   var content;
   var callError;
-  var retry = 10;
+  var retry = retry_limit;
 
   // get the general data of the artist
   do {
@@ -441,7 +443,7 @@ async function getPlaylistContent(id) {
     if(call) {
       content = call; // push the data in the response
     } else {
-      await sleep(1500);
+      await sleep(retry_timeout);
     }
   } while (!content && retry > 0); // loop while there is another page
   
@@ -744,8 +746,8 @@ function formatPlaylistToFeed(playlist) {
 // UTILITIES //
 ///////////////
 function sortLastReleases ( a, b ) {
-  if (! a.content.updated_at ) return 1;
-  if (! b.content.updated_at ) return -1;
+  if ( a.content.updated_at == null ) return 1;
+  if ( b.content.updated_at == null ) return -1;
 
   if ( a.content.updated_at > b.content.updated_at ) {
     return -1;

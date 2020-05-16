@@ -5,6 +5,14 @@ const morgan = require('morgan');
 
 const deezerRoutes = require('./api/routes/deezer')
 
+// Allow CORS from this endpoint
+app.use((req, res, next) => {
+  let origin = req.headers.origin;
+  res.header("Access-Control-Allow-Origin", origin);
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  next();
+});
+
 app.use(morgan('dev'));
 
 app.use('/deezer', deezerRoutes);
