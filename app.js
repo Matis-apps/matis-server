@@ -8,7 +8,7 @@ const deezerRoutes = require('./api/routes/deezer')
 // Allow CORS from this endpoint
 app.use((req, res, next) => {
   console.log(req.headers.origin)
-  let origin = req.headers.origin == "http://localhost:8080" ? "http://localhost:8080" : "https://api.my-matis.com";
+  let origin = req.headers.origin == "http://localhost:8080" ? "http://localhost:8080" : "https://dev.my-matis.com";
   res.header("Access-Control-Allow-Origin", origin);
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
   next();
