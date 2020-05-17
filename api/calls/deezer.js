@@ -4,7 +4,7 @@ const moment = require('moment');
 const mutils = require('../../mutils');
 
 const call_limit = 100; // Limit of items to retrieve
-const retry_limit = 6; // Limit number of retry
+const retry_limit = 5; // Limit number of retry
 const retry_timeout = 1500; // Limit number of retry
 
 /**
@@ -233,7 +233,7 @@ async function getRelatedArtists(id) {
               artists.push(formatArtistToFeed(a));
             }
           })
-        });
+        }).catch(err => callError = err);
     } else {
       await sleep(retry_timeout);
     }
@@ -400,11 +400,7 @@ async function fetchPlaylists(user_id = 'me', access_token = null) {
           if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
             setTimeout(recursive, retry_timeout, index, retry-1);
           } else {
-            if(playlists.length == 0) { // if there's no playlist retrieved, reject with the error
-              reject(err);              
-            } else { // otherwise, best-effort mode
-              resolve(playlists);
-            }
+            resolve(playlists);
           }
         });
     };
@@ -481,16 +477,18 @@ async function getMyReleases(user_id = 'me', access_token = null) {
   var callError;
 
   const artists = await fetchArtists(user_id, access_token).catch(err => callError = err);
-  if(artists) {
+  if(artists && artists.length > 0) {
     await Promise
-      .all(artists.map(a => fetchArtist(a.id)))
+      .all(artists.map(a => 
+        fetchArtist(a.id).catch(err => callError = err))
+      )
       .then(results => {
         results.forEach((a) => {
           if (a.albums && a.albums.total > 0) {            
             releases.push(formatArtistToFeed(a));
           }
         })
-      });
+      }).catch(err => callError = err);
   }
 
   const playlists = await fetchPlaylists(user_id, access_token).catch(err => callError = err);
@@ -523,21 +521,21 @@ async function getReleases(user_id, access_token = null) {
   var callError;
 
   const artists = await fetchArtists(user_id, access_token).catch(err => callError = err);
-  console.log(callError)
-  if(artists) {
+  if(artists && artists.length > 0) {
     await Promise
-      .all(artists.map(a => fetchArtist(a.id)))
+      .all(artists.map(a => 
+        fetchArtist(a.id).catch(err => callError = err))
+      )
       .then(results => {
         results.forEach((a) => {
           if (a.albums && a.albums.data.length > 0) {            
             releases.push(formatArtistToFeed(a));
           }
         })
-      });
+      }).catch(err => callError = err);
   }
 
   const playlists = await fetchPlaylists(user_id, access_token).catch(err => callError = err);
-  console.log(callError)
   if(playlists) {
     playlists.forEach(p => {
       releases.push(formatPlaylistToFeed(p));
@@ -545,7 +543,6 @@ async function getReleases(user_id, access_token = null) {
   }
 
   const albums = await fetchAlbums(user_id, access_token).catch(err => callError = err);
-  console.log(callError)
   if(albums) {
     albums.forEach(a => {
       let existingAlbum = releases.find(r => {
