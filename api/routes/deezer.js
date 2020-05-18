@@ -58,6 +58,7 @@ router.get('/releases', (req, res, next) => {
   deezer.getMyReleases(user_id).then(data => {
     res.status(200).json({
       'data': data,
+      'genres': data.genres,
       'count': data.length,
     })
   }).catch(err => next(err));
@@ -68,6 +69,7 @@ router.get('/releases/:user_id', (req, res, next) => {
   deezer.getReleases(user_id).then(data => {
     res.status(200).json({
       'data': data,
+      'genres': data.genres,
       'count': data.length,
     })
   }).catch(err => next(err));
@@ -76,11 +78,30 @@ router.get('/releases/:user_id', (req, res, next) => {
 router.get('/release/:obj([a-z]+)/:id([0-9]+)', (req, res, next) => {
   const obj = req.params.obj;
   const id = req.params.id;
-  console.log('obj= '+obj+' id= '+id)
-
   deezer.getReleaseContent(obj, id).then(data => {
     res.status(200).json({
       'data': data,
+    })
+  }).catch(err => next(err));
+});
+
+/*
+router.get('/genres', (req, res, next) => {
+  deezer.getGenres().then(data => {
+    res.status(200).json({
+      'data': data,
+      'count': data.length
+    })
+  }).catch(err => next(err));
+});
+*/
+
+router.get('/social', (req, res, next) => {
+  deezer.getSocialFriends(user_id).then(data => {
+    res.status(200).json({
+      'data': data,
+      'countFollowers': data.followers ? data.followers.length : 0,
+      'countFollowings': data.followings ? data.followings.length : 0,
     })
   }).catch(err => next(err));
 });

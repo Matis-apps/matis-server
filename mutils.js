@@ -10,5 +10,11 @@ async function asyncForEach(array, callback) {
   }
 }
 
+function capitalize (s) {
+  if (typeof s !== 'string') return '';
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 exports.error = error;
 exports.asyncForEach = asyncForEach;
+exports.capitalize = capitalize;

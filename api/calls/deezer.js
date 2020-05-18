@@ -491,8 +491,27 @@ async function getMyReleases(user_id = 'me', access_token = null) {
       }).catch(err => callError = err);
   }
 
+  var genres = [];
+  genres.push({key: -42, value: "Tous"})
+  if(artists && artists.length > 0) {
+    var availableGenres = [...new Set(releases.map(item => item.content.genre))];
+    const call = await getGenres().catch(err => callError = err);
+    if(call && call.length > 0) {
+      availableGenres.forEach(item => {
+
+        let existingGenre = call.find(g => {
+          return g.id == item;
+        });
+        if(existingGenre) {
+          genres.push({key: existingGenre.id, value: existingGenre.name}) 
+        }
+      })
+    }
+  }
+  releases.genres = genres;
+
   const playlists = await fetchPlaylists(user_id, access_token).catch(err => callError = err);
-  if(playlists) {
+  if(playlists && playlists.length > 0) {
     playlists.forEach(p => {
       if(!p.is_loved_track && p.creator.id != user_id) {
         releases.push(formatPlaylistToFeed(p));
@@ -535,19 +554,39 @@ async function getReleases(user_id, access_token = null) {
       }).catch(err => callError = err);
   }
 
+  var genres = [];
+  genres.push({key: -42, value: "Tous"})
+  if(artists && artists.length > 0) {
+    var availableGenres = [...new Set(releases.map(item => item.content.genre))];
+    const call = await getGenres().catch(err => callError = err);
+    if(call && call.length > 0) {
+      availableGenres.forEach(item => {
+
+        let existingGenre = call.find(g => {
+          return g.id == item;
+        });
+        if(existingGenre) {
+          genres.push({key: existingGenre.id, value: existingGenre.name}) 
+        }
+      })
+    }
+  }
+  releases.genres = genres;
+
   const playlists = await fetchPlaylists(user_id, access_token).catch(err => callError = err);
-  if(playlists) {
+  if(playlists && playlists.length > 0) {
     playlists.forEach(p => {
       releases.push(formatPlaylistToFeed(p));
     });
   }
 
   const albums = await fetchAlbums(user_id, access_token).catch(err => callError = err);
-  if(albums) {
+  if(albums && albums.length > 0) {
     albums.forEach(a => {
       let existingAlbum = releases.find(r => {
-        return r.id == a.id && r.type == a.record_type;
+        return r.content.id == a.id && r.content.type == a.record_type;
       });
+
       if (! existingAlbum) {
         releases.push(formatAlbumToFeed(a));
       }
@@ -595,6 +634,233 @@ async function getReleaseContent(obj, id) {
       reject(mutils.error('No content', 200))
     }
   });
+}
+
+/**
+ * getRelatedArtists
+ * @params id
+ */
+async function getGenres() {
+
+  var genres = [];
+  var callError;
+  var retry = retry_limit;
+
+  // get the general data of the artist
+  do {
+    const options = {
+        hostname: 'api.deezer.com',
+        path: '/genre',
+        method: 'GET',
+        headers: {
+          'content-type': 'text/json'
+        },
+      };
+
+    const call = await httpCall(options) // await for the response
+      .catch(err => { // catch if error
+        callError = err;
+        retry--;
+      });
+
+    if(call) {
+      genres = call.data;
+    } else {
+      await sleep(retry_timeout);
+    }
+  } while (genres.length == 0 && retry > 0); // loop while there is another page
+  
+  return new Promise((resolve, reject) => {
+    if (genres.length == 0) {
+      reject(mutils.error("No content"), 200);
+    } else {
+      resolve(genres)
+    }
+  })
+}
+
+/**
+ * fetchFollowings
+ * @params user_id
+ * @params access_token
+ */
+async function fetchFollowings(user_id, access_token) {
+
+  var followings = [];
+    
+  return new Promise((resolve, reject) => {
+    /**
+     * recursive Fill the artists array and handle the pagination recursively
+     * @params index
+     * @params retry
+     */
+    let recursive = async function (index = 0, retry = retry_limit) {
+      // Configuration of the http request
+      const options = {
+        hostname: 'api.deezer.com',
+        path: '/user/'+user_id+'/followings?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
+        method: 'GET',
+        headers: {
+          'content-type': 'text/json'
+        },
+      };
+
+      httpCall(options)
+        .then(response => { // response is ok, push the result in array
+          Array.prototype.push.apply(followings, response.data)
+          if(response.next) { // if has a next object, keep going
+            recursive(index+call_limit)
+              .catch(() => resolve(followings)); // resolve the iterations if an error happens
+          } else { // no more page, resolve with the result
+            resolve(followings);
+          }
+        })
+        .catch(err => {
+          if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
+            setTimeout(recursive, retry_timeout, index, retry-1);
+          } else {
+            if(followings.length == 0) { // if there's no playlist retrieved, reject with the error
+              reject(err);              
+            } else { // otherwise, best-effort mode
+              resolve(followings);
+            }
+          }
+        });
+    };
+
+    recursive()
+  });
+}
+
+/**
+ * fetchFollowings
+ * @params user_id
+ * @params access_token
+ */
+async function fetchFollowings(user_id, access_token = null) {
+
+  var followings = [];
+    
+  return new Promise((resolve, reject) => {
+    /**
+     * recursive Fill the artists array and handle the pagination recursively
+     * @params index
+     * @params retry
+     */
+    let recursive = async function (index = 0, retry = retry_limit) {
+      // Configuration of the http request
+      const options = {
+        hostname: 'api.deezer.com',
+        path: '/user/'+user_id+'/followings?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
+        method: 'GET',
+        headers: {
+          'content-type': 'text/json'
+        },
+      };
+
+      httpCall(options)
+        .then(response => { // response is ok, push the result in array
+          Array.prototype.push.apply(followings, response.data)
+          if(response.next) { // if has a next object, keep going
+            recursive(index+call_limit)
+              .catch(() => resolve(followings)); // resolve the iterations if an error happens
+          } else { // no more page, resolve with the result
+            resolve(followings);
+          }
+        })
+        .catch(err => {
+          if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
+            setTimeout(recursive, retry_timeout, index, retry-1);
+          } else {
+            if(followings.length == 0) { // if there's no playlist retrieved, reject with the error
+              reject(err);              
+            } else { // otherwise, best-effort mode
+              resolve(followings);
+            }
+          }
+        });
+    };
+
+    recursive()
+  });
+}
+
+
+/**
+ * fetchFollowings
+ * @params user_id
+ * @params access_token
+ */
+async function fetchFollowers(user_id, access_token = null) {
+
+  var followers = [];
+    
+  return new Promise((resolve, reject) => {
+    /**
+     * recursive Fill the artists array and handle the pagination recursively
+     * @params index
+     * @params retry
+     */
+    let recursive = async function (index = 0, retry = retry_limit) {
+      // Configuration of the http request
+      const options = {
+        hostname: 'api.deezer.com',
+        path: '/user/'+user_id+'/followers?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
+        method: 'GET',
+        headers: {
+          'content-type': 'text/json'
+        },
+      };
+
+      httpCall(options)
+        .then(response => { // response is ok, push the result in array
+          Array.prototype.push.apply(followers, response.data)
+          if(response.next) { // if has a next object, keep going
+            recursive(index+call_limit)
+              .catch(() => resolve(followers)); // resolve the iterations if an error happens
+          } else { // no more page, resolve with the result
+            resolve(followers);
+          }
+        })
+        .catch(err => {
+          if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
+            setTimeout(recursive, retry_timeout, index, retry-1);
+          } else {
+            if(followers.length == 0) { // if there's no playlist retrieved, reject with the error
+              reject(err);              
+            } else { // otherwise, best-effort mode
+              resolve(followers);
+            }
+          }
+        });
+    };
+
+    recursive()
+  });
+}
+
+/**
+ * getSocialFriends
+ * @params id
+ */
+async function getSocialFriends(user_id, access_token) {
+  return new Promise((resolve, reject) => {
+      // retrieve the general content
+      const promise = fetchFollowers(user_id, access_token)
+        .then((response) => {
+          let social = new Object();
+          social.followers = response.map(a => formatUserToStandard(a)).sort((a,b) => sortFriends(a,b));
+          return social;
+        }).catch(err => reject(err));
+
+      promise.then((social) => {
+        fetchFollowings(user_id, access_token).then((response) => {
+          social.followings = response.map(a => formatUserToStandard(a)).sort((a,b) => sortFriends(a,b));
+          resolve(social);
+        })
+      }).catch(err => reject(err));
+
+    });
 }
 
 ////////////////////////
@@ -659,6 +925,17 @@ function formatTrackToStandard(track){
   };
 }
 
+function formatUserToStandard(user){
+  return {
+    _obj: 'user',
+    _uid: 'deezer-'+user.type+'-'+user.id,
+    // Related to the author
+    id: user.id,
+    name: user.name,
+    picture: user.picture,
+  };
+}
+
 //////////////////////////////
 // FORMAT TO FEED (RELEASE) //
 //////////////////////////////
@@ -681,6 +958,7 @@ function formatArtistToFeed(artist){
       type: artist.albums.data[0].record_type,
       picture: artist.albums.data[0].cover_medium,
       link: artist.albums.data[0].link,
+      genre: artist.albums.data[0].genre_id,
       updated_at: artist.albums.data[0].release_date,
       last: artist.albums.data[0],
     }
@@ -706,6 +984,7 @@ function formatAlbumToFeed(album) {
       type: album.record_type,
       picture: album.cover_medium,
       link: album.link,
+      genre: album.genre_id,
       updated_at: album.release_date,
       tracks: album.tracks ? album.tracks.data.map(t => formatTrackToStandard(t)) : null,
       last: album,
@@ -732,6 +1011,7 @@ function formatPlaylistToFeed(playlist) {
       type: playlist.type,
       picture: playlist.picture_medium,
       link: playlist.link,
+      genre: null,
       updated_at: playlist.time_mod ? timestampToDate(playlist.time_mod) : timestampToDate(playlist.time_add), 
       tracks: playlist.tracks ? playlist.tracks.data.map(t => formatTrackToStandard(t)) : null,
       last: playlist,
@@ -755,6 +1035,19 @@ function sortLastReleases ( a, b ) {
   return 0;
 }
 
+function sortFriends ( a, b ) {
+  if ( a.name == null ) return -1;
+  if ( b.name == null ) return 1;
+
+  if ( mutils.capitalize(a.name) > mutils.capitalize(b.name) ) {
+    return 1;
+  }
+  if ( mutils.capitalize(a.name) < mutils.capitalize(b.name) ) {
+    return -1;
+  }
+  return 0;
+}
+
 function timestampToDate(seconds) {
   return moment.unix(seconds).format("YYYY-MM-DD");
 }
@@ -771,3 +1064,5 @@ exports.getPlaylists = getPlaylists;
 exports.getMyReleases = getMyReleases;
 exports.getReleases = getReleases;
 exports.getReleaseContent = getReleaseContent;
+exports.getGenres = getGenres;
+exports.getSocialFriends = getSocialFriends;
