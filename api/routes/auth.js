@@ -12,7 +12,6 @@ router.post('/login', (req, res, next) => {
   }).catch(err => next(err));
 });
 
-
 router.post('/register', (req, res, next) => {
   auth.register(req).then(data => {
     res.status(200).json({
@@ -20,6 +19,5 @@ router.post('/register', (req, res, next) => {
     })
   }).catch(err => next(err));
 });
-
 
 module.exports = router;

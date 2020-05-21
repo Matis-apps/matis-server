@@ -18,9 +18,12 @@ const PRIV_KEY = fs.readFileSync(pathToKey, 'utf8');
  * This function provides a basic template to return HTTP error with a code and a message
  */
 function error(message, code) {
-  let e = new Error(message);
+  var e = new Error(message);
   e.code = code;
-  return e;
+  return {
+    code: e.code,
+    message: e.message,
+  };
 }
 
 /**

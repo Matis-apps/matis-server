@@ -32,7 +32,7 @@ const deezerRoutes = require('./api/routes/deezer')
 
 app.use('/auth', authRoutes);
 app.use('/users', passport.authenticate('jwt', {session: false}), usersRoutes);
-app.use('/deezer', deezerRoutes);
+app.use('/deezer', passport.authenticate('jwt', {session: false}), require('./api/middleware/isDeezer').isDeezer, deezerRoutes);
 
 // No route found, return an error
 app.use((req, res, next) => {
