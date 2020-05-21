@@ -1,28 +1,43 @@
 const express = require('express');
 const app = express();
-const mutils = require('./mutils');
+const cors = require('cors');
+const passport = require('passport');
+const utils = require('./utils');
 const morgan = require('morgan');
 
-const deezerRoutes = require('./api/routes/deezer')
 
-// Allow CORS from this endpoint
-app.use((req, res, next) => {
-  console.log(req.headers.origin)
-  let origin = req.headers.origin == "http://localhost:8080" ? "http://localhost:8080" : "https://dev.my-matis.com";
-  res.header("Access-Control-Allow-Origin", origin);
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-  next();
-});
+// Database
+require('./config/database');
+require('./models/user');
 
+// Pass the global passport object into the configuration function
+require('./config/passport')(passport);
+
+// This will initialize the passport object on every request
+app.use(passport.initialize());
+
+// Parse JSON bodies (as sent by API clients)
+app.use(express.json());
+
+// Local tools
 app.use(morgan('dev'));
 
+// Allow CORS from this endpoint
+app.use(cors());
+
+// Routes
+const authRoutes = require('./api/routes/auth')
+const usersRoutes = require('./api/routes/users')
+const deezerRoutes = require('./api/routes/deezer')
+
+app.use('/auth', authRoutes);
+app.use('/users', passport.authenticate('jwt', {session: false}), usersRoutes);
 app.use('/deezer', deezerRoutes);
 
 // No route found, return an error
 app.use((req, res, next) => {
-  next(mutils.error('Route '+req.originalUrl+' not found', 404));
+  next(utils.error('Route '+req.originalUrl+' not found', 404));
 })
-
 
 app.use((error,  req, res, next) => {
   res.status(error.code || 500).json({

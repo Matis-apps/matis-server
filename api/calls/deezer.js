@@ -1,7 +1,7 @@
 const http = require('http');
 const sleep = require('await-sleep');
 const moment = require('moment');
-const mutils = require('../../mutils');
+const utils = require('../../utils');
 
 const call_limit = 100; // Limit of items to retrieve
 const retry_limit = 8; // Limit number of retry
@@ -24,21 +24,21 @@ const httpCall = async function(options) {
           try {
             let json = JSON.parse(responseBody)
             if (!json) { // json is undefined or null
-              reject(mutils.error("Unvalid json", 500));
+              reject(utils.error("Unvalid json", 500));
             } else if (json.error) { // json has an error (set by Deezer)
-              reject(mutils.error(json.error.message, json.error.code));
+              reject(utils.error(json.error.message, json.error.code));
             } else { // otherwise, json is ok
               resolve(json)
             }
           } catch(e) {
-            reject(mutils.error(e.message, 500));
+            reject(utils.error(e.message, 500));
           }
         } else {
-          reject(mutils.error(response, response.statusCode));
+          reject(utils.error(response, response.statusCode));
         }
       })
     }).on('error', function(e) {
-      reject(mutils.error(e.message, 500));
+      reject(utils.error(e.message, 500));
     });
   })
 }
@@ -206,7 +206,6 @@ async function fetchArtistAlbums(artist_id, access_token) {
         })
         .catch(err => {
           if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
-            console.log(artist_id, retry)
             setTimeout(recursive, retry_timeout, index, retry-1);
           } else {
             if(albums.length == 0) { // if there's no playlist retrieved, reject with the error
@@ -561,7 +560,7 @@ async function getMyReleases(user_id = 'me', access_token = null) {
 
   return new Promise((resolve, reject) => {
     if (releases.length == 0) {
-      reject(mutils.error("No content"), 200);
+      reject(utils.error("No content"), 200);
     } else {
       releases.sort((a,b) => sortLastReleases(a,b));
       resolve(releases)
@@ -635,7 +634,7 @@ async function getReleases(user_id, access_token = null) {
 
   return new Promise((resolve, reject) => {
     if (releases.length == 0) {
-      reject(mutils.error("No content"), 200);
+      reject(utils.error("No content"), 200);
     } else {
       releases.sort((a,b) => sortLastReleases(a,b));
       resolve(releases)
@@ -671,7 +670,7 @@ async function getReleaseContent(obj, id) {
           resolve(formatPlaylistToFeed(response));          
         }).catch(err => reject(err));
     } else {
-      reject(mutils.error('No content', 200))
+      reject(utils.error('No content', 200))
     }
   });
 }
@@ -712,7 +711,7 @@ async function getGenres() {
   
   return new Promise((resolve, reject) => {
     if (genres.length == 0) {
-      reject(mutils.error("No content"), 200);
+      reject(utils.error("No content"), 200);
     } else {
       resolve(genres)
     }
@@ -1092,10 +1091,10 @@ function sortFriends ( a, b ) {
   if ( a.name == null ) return -1;
   if ( b.name == null ) return 1;
 
-  if ( mutils.capitalize(a.name) > mutils.capitalize(b.name) ) {
+  if ( utils.capitalize(a.name) > utils.capitalize(b.name) ) {
     return 1;
   }
-  if ( mutils.capitalize(a.name) < mutils.capitalize(b.name) ) {
+  if ( utils.capitalize(a.name) < utils.capitalize(b.name) ) {
     return -1;
   }
   return 0;
