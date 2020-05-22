@@ -1,4 +1,4 @@
-const http = require('http');
+const https = require('https');
 const sleep = require('await-sleep');
 const moment = require('moment');
 const utils = require('../../utils');
@@ -8,12 +8,12 @@ const retry_limit = 8; // Limit number of retry
 const retry_timeout = 1800; // Limit number of retry
 
 /**
- * httpCall Call the API end parse de response
+ * httpsCall Call the API end parse de response
  * @params options
  */
-const httpCall = async function(options) {
+const httpsCall = async function(options) {
   return new Promise((resolve, reject) => {
-    var req = http.get(options, response => {
+    var req = https.get(options, response => {
       // Event when receiving the data
       var responseBody = "";
       response.on('data', function(chunck) { responseBody += chunck });
@@ -59,7 +59,7 @@ async function fetchArtists(user_id, access_token) {
      * @params retry
      */
     let recursive = async function (index = 0, retry = retry_limit) {
-      // Configuration of the http request
+      // Configuration of the https request
       const options = {
         hostname: 'api.deezer.com',
         path: '/user/'+user_id+'/artists?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
@@ -69,7 +69,7 @@ async function fetchArtists(user_id, access_token) {
         },
       };
 
-      httpCall(options)
+      httpsCall(options)
         .then(response => { // response is ok, push the result in array
           Array.prototype.push.apply(artists, response.data)
           if(response.next) { // if has a next object, keep going
@@ -132,7 +132,7 @@ async function fetchArtist(id) {
         },
       };
 
-    const call = await httpCall(options) // await for the response
+    const call = await httpsCall(options) // await for the response
       .catch(err => { // catch if error
         callError = err;
         retry--;
@@ -184,7 +184,7 @@ async function fetchArtistAlbums(artist_id, access_token) {
      * @params retry
      */
     let recursive = async function (index = 0, retry = retry_limit) {
-      // Configuration of the http request
+      // Configuration of the https request
       const options = {
         hostname: 'api.deezer.com',
         path: '/artist/'+artist_id+'/albums?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
@@ -194,7 +194,7 @@ async function fetchArtistAlbums(artist_id, access_token) {
         },
       };
 
-      httpCall(options)
+      httpsCall(options)
         .then(response => { // response is ok, push the result in array
           Array.prototype.push.apply(albums, response.data)
           if(response.next) { // if has a next object, keep going
@@ -257,7 +257,7 @@ async function getRelatedArtists(id) {
         },
       };
 
-    const call = await httpCall(options) // await for the response
+    const call = await httpsCall(options) // await for the response
       .catch(err => { // catch if error
         callError = err;
         retry--;
@@ -303,7 +303,7 @@ async function fetchAlbums(user_id = 'me', access_token) {
      * @params retry
      */
     let recursive = async function (index = 0, retry = retry_limit) {
-      // Configuration of the http request
+      // Configuration of the https request
       const options = {
         hostname: 'api.deezer.com',
         path: '/user/'+user_id+'/albums?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
@@ -313,7 +313,7 @@ async function fetchAlbums(user_id = 'me', access_token) {
         },
       };
 
-      httpCall(options)
+      httpsCall(options)
         .then(response => { // response is ok, push the result in array
           Array.prototype.push.apply(albums, response.data)
           if(response.next) { // if has a next object, keep going
@@ -376,7 +376,7 @@ async function getAlbum(id) {
         },
       };
 
-    const call = await httpCall(options) // await for the response
+    const call = await httpsCall(options) // await for the response
       .catch(err => { // catch if error
         callError = err;
         retry--;
@@ -414,7 +414,7 @@ async function fetchPlaylists(user_id = 'me', access_token) {
      * @params retry
      */
     let recursive = async function (index = 0, retry = retry_limit) {
-      // Configuration of the http request
+      // Configuration of the https request
       const options = {
         hostname: 'api.deezer.com',
         path: '/user/'+user_id+'/playlists?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
@@ -424,7 +424,7 @@ async function fetchPlaylists(user_id = 'me', access_token) {
         },
       };
 
-      httpCall(options)
+      httpsCall(options)
         .then(response => { // response is ok, push the result in array
           Array.prototype.push.apply(playlists, response.data)
           if(response.next) {
@@ -468,7 +468,7 @@ async function getPlaylistContent(id) {
         },
       };
 
-    const call = await httpCall(options) // await for the response
+    const call = await httpsCall(options) // await for the response
       .catch(err => { // catch if error
         callError = err;
         retry--;
@@ -697,7 +697,7 @@ async function getGenres() {
         },
       };
 
-    const call = await httpCall(options) // await for the response
+    const call = await httpsCall(options) // await for the response
       .catch(err => { // catch if error
         callError = err;
         retry--;
@@ -735,7 +735,7 @@ async function fetchFollowings(user_id, access_token) {
      * @params retry
      */
     let recursive = async function (index = 0, retry = retry_limit) {
-      // Configuration of the http request
+      // Configuration of the https request
       const options = {
         hostname: 'api.deezer.com',
         path: '/user/'+user_id+'/followings?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
@@ -745,7 +745,7 @@ async function fetchFollowings(user_id, access_token) {
         },
       };
 
-      httpCall(options)
+      httpsCall(options)
         .then(response => { // response is ok, push the result in array
           Array.prototype.push.apply(followings, response.data)
           if(response.next) { // if has a next object, keep going
@@ -788,7 +788,7 @@ async function fetchFollowings(user_id, access_token) {
      * @params retry
      */
     let recursive = async function (index = 0, retry = retry_limit) {
-      // Configuration of the http request
+      // Configuration of the https request
       const options = {
         hostname: 'api.deezer.com',
         path: '/user/'+user_id+'/followings?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
@@ -798,7 +798,7 @@ async function fetchFollowings(user_id, access_token) {
         },
       };
 
-      httpCall(options)
+      httpsCall(options)
         .then(response => { // response is ok, push the result in array
           Array.prototype.push.apply(followings, response.data)
           if(response.next) { // if has a next object, keep going
@@ -842,7 +842,7 @@ async function fetchFollowers(user_id, access_token) {
      * @params retry
      */
     let recursive = async function (index = 0, retry = retry_limit) {
-      // Configuration of the http request
+      // Configuration of the https request
       const options = {
         hostname: 'api.deezer.com',
         path: '/user/'+user_id+'/followers?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
@@ -852,7 +852,7 @@ async function fetchFollowers(user_id, access_token) {
         },
       };
 
-      httpCall(options)
+      httpsCall(options)
         .then(response => { // response is ok, push the result in array
           Array.prototype.push.apply(followers, response.data)
           if(response.next) { // if has a next object, keep going
@@ -895,7 +895,7 @@ async function getMeAccount(access_token) {
         },
       };
 
-    const call = await httpCall(options) // await for the response
+    const call = await httpsCall(options) // await for the response
       .catch(err => { // catch if error
         callError = err;
         retry--;
@@ -952,7 +952,7 @@ function formatArtistToStandard(artist){
     id: artist.id,
     name: artist.name,
     picture: artist.picture ? artist.picture : null,
-    link: artist.link ? artist.link : "https://www.deezer.com/artist/"+artist.id,
+    link: artist.link ? artist.link : "httpss://www.deezer.com/artist/"+artist.id,
     albums: artist.albums ? artist.albums.data.map(a => formatAlbumToStandard(a)) : null,
     nb_albums: artist.nb_album ? artist.nb_album : null,
     nb_fans: artist.nb_fan ? artist.nb_fan : null,
@@ -1053,7 +1053,7 @@ function formatAlbumToFeed(album) {
       id: album.artist.id,
       name: album.artist.name,
       picture: album.artist.picture_small,
-      link: "https://www.deezer.com/profile/" + album.artist.id,
+      link: "httpss://www.deezer.com/profile/" + album.artist.id,
       added_at: album.time_add ? timestampToDate(album.time_add) : null,
     },
     // Related to the content
@@ -1080,7 +1080,7 @@ function formatPlaylistToFeed(playlist) {
       id: playlist.creator.id,
       name: playlist.creator.name,
       picture: null,
-      link: "https://www.deezer.com/profile/" + playlist.creator.id,
+      link: "httpss://www.deezer.com/profile/" + playlist.creator.id,
       added_at: playlist.time_add ? timestampToDate(playlist.time_add) : null, 
     },
     // Related to the content
