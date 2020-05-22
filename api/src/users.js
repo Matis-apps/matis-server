@@ -1,6 +1,7 @@
 const https = require('https');
 const utils = require('../../utils');
 const User = require('mongoose').model('User');
+const deezerMe = require('./deezer').getMeAccount;
 
 function me(req) {
   return new Promise((resolve, reject) => {
@@ -13,6 +14,7 @@ function me(req) {
 }
 
 function accounts(req) {
+
 }
 
 
@@ -63,15 +65,26 @@ function registerDeezer(req, code) {
 function saveDeezer(req, json) {
   return new Promise(async (resolve, reject) => {
 
-    const query = { _id: req.user._id };
-    const update = { deezer: json };
-    const options = { new: true, upsert: true };
+    const me = await deezerMe(json.access_token);
 
-    await User.findOneAndUpdate(query, update, options)
+    if (me) {
+      const query = { _id: req.user._id };
+      const update = { 
+        deezer: {
+          account: me,
+          token: json,
+        } 
+      };
+      const options = { new: true, upsert: true, useFindAndModify: false };
+
+      await User.findOneAndUpdate(query, update, options)
       .then((user) => {
         resolve(user)
       })
       .catch(err => reject(utils.error(err, 500)));
+    } else {
+      reject(utils.error("Can't retrieve deezer/user/me", 500))
+    }
   })
 }
 

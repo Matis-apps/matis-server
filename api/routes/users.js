@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const users = require('../calls/users');
+const users = require('../src/users');
 
 router.get('/me', (req, res, next) => {
   users.me(req).then(data => {

@@ -101,7 +101,7 @@ async function fetchArtists(user_id, access_token) {
  * @params user_id
  * @params access_token
  */
-async function getArtists(user_id = 'me', access_token = null) {
+async function getArtists(user_id = 'me', access_token) {
   return new Promise((resolve, reject) => {
     fetchArtists(user_id, access_token)
       .then(result => {
@@ -292,7 +292,7 @@ async function getRelatedArtists(id) {
  * @params user_id
  * @params access_token
  */
-async function fetchAlbums(user_id = 'me', access_token = null) {
+async function fetchAlbums(user_id = 'me', access_token) {
 
   var albums = [];
     
@@ -345,7 +345,7 @@ async function fetchAlbums(user_id = 'me', access_token = null) {
  * @params user_id
  * @params access_token
  */
-async function getAlbums(user_id = 'me', access_token = null) {
+async function getAlbums(user_id = 'me', access_token) {
   return new Promise((resolve, reject) => {
     fetchAlbums(user_id, access_token)
       .then(result => {
@@ -403,7 +403,7 @@ async function getAlbum(id) {
  * @params user_id
  * @params access_token
  */
-async function fetchPlaylists(user_id = 'me', access_token = null) {
+async function fetchPlaylists(user_id = 'me', access_token) {
 
   var playlists = [];
   
@@ -495,7 +495,7 @@ async function getPlaylistContent(id) {
  * @params user_id
  * @params access_token
  */
-async function getPlaylists(user_id = 'me', access_token = null) {
+async function getPlaylists(user_id = 'me', access_token) {
   return new Promise((resolve, reject) => {
     fetchPlaylists(user_id, access_token)
       .then(result => {
@@ -510,7 +510,8 @@ async function getPlaylists(user_id = 'me', access_token = null) {
  * @params user_id
  * @params access_token
  */
-async function getMyReleases(user_id = 'me', access_token = null) {
+async function getMyReleases(access_token) {
+  const user_id = 'me';
   var releases = [];
   var callError;
 
@@ -574,7 +575,7 @@ async function getMyReleases(user_id = 'me', access_token = null) {
  * @params user_id
  * @params access_token
  */
-async function getReleases(user_id, access_token = null) {
+async function getReleases(user_id, access_token) {
   var releases = [];
   var callError;
 
@@ -776,7 +777,7 @@ async function fetchFollowings(user_id, access_token) {
  * @params user_id
  * @params access_token
  */
-async function fetchFollowings(user_id, access_token = null) {
+async function fetchFollowings(user_id, access_token) {
 
   var followings = [];
     
@@ -830,7 +831,7 @@ async function fetchFollowings(user_id, access_token = null) {
  * @params user_id
  * @params access_token
  */
-async function fetchFollowers(user_id, access_token = null) {
+async function fetchFollowers(user_id, access_token) {
 
   var followers = [];
     
@@ -876,6 +877,44 @@ async function fetchFollowers(user_id, access_token = null) {
 
     recursive()
   });
+}
+
+async function getMeAccount(access_token) {
+  var me;
+  var callError;
+  var retry = retry_limit;
+
+  // get the general data of the artist
+  do {
+    const options = {
+        hostname: 'api.deezer.com',
+        path: '/user/me?access_token=' + access_token,
+        method: 'GET',
+        headers: {
+          'content-type': 'text/json'
+        },
+      };
+
+    const call = await httpCall(options) // await for the response
+      .catch(err => { // catch if error
+        callError = err;
+        retry--;
+      });
+
+    if(call) {
+      me = call;
+    } else {
+      await sleep(retry_timeout);
+    }
+  } while (!me && retry > 0); // loop while there is another page
+  
+  return new Promise((resolve, reject) => {
+    if (!me) {
+      reject(utils.error("No content"), 200);
+    } else {
+      resolve(formatUserToStandard(me))
+    }
+  })
 }
 
 /**
@@ -971,6 +1010,7 @@ function formatUserToStandard(user){
     // Related to the author
     id: user.id,
     name: user.name,
+    fullname: user.firstname && user.lastname ? user.firstname + ' ' + user.lastname : null,
     picture: user.picture,
   };
 }
@@ -1117,4 +1157,5 @@ exports.getMyReleases = getMyReleases;
 exports.getReleases = getReleases;
 exports.getReleaseContent = getReleaseContent;
 exports.getGenres = getGenres;
+exports.getMeAccount = getMeAccount;
 exports.getSocialFriends = getSocialFriends;
