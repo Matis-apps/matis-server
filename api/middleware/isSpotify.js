@@ -1,27 +1,29 @@
+const https = require('https');
+const qs = require('querystring');
 const utils = require('../../utils');
+const User = require('mongoose').model('User');
 
 module.exports.isSpotify = async (req, res, next) => {
   if (req.user) {
-    if (req.user.spotify && req.user.spotify.account && req.user.spotify.token) {
-      if (req.user.spotify.account.id && req.user.spotify.token.refresh_token) {
-        await registerSpotify(req.user._id, req.user.spotify.token.refresh_token)
+    if (req.user._id && req.user.spotify && req.user.spotify.token) {
+      if (req.user.spotify.token.refresh_token) {
+        await refreshSpotify(req.user._id, req.user.spotify.token.refresh_token)
           .then(spotify_user => {
             req.spotify_id = spotify_user.account.id;
             req.spotify_token = spotify_user.token.access_token;
             next()
           })
-          .catch(err => reject(err, 500))
+          .catch(err => next(utils.error(err, 500)))
       } else {
         next(utils.error("Can't acess user info", 500))
       }
     } else {
-      next(utils.error("No deezer account", 403))
+      next(utils.error("No spotify account", 403))
     }
   } else {
     next(utils.error("No account", 401))
   }
 }
-
 
 function refreshSpotify(_id, refresh_token) {
   return new Promise(async (resolve, reject) => {
@@ -51,7 +53,6 @@ function refreshSpotify(_id, refresh_token) {
       response.on('end', async () => {
         try {
           let json = JSON.parse(responseBody)
-
           if (!json) {
             reject(utils.error("Unvalid json", 500));
           } else {
@@ -80,22 +81,17 @@ function refreshSpotify(_id, refresh_token) {
 
 function saveSpotify(_id, json) {
   return new Promise(async (resolve, reject) => {
-    const me = await spotifyMe(json.access_token);
-    if (me) {
-      const query = { _id: _id };
-      const update = { 
-        spotify: {
-          token: json,
-        } 
-      };
-      const options = { new: true, upsert: true, useFindAndModify: false };
-      await User.findOneAndUpdate(query, update, options)
-        .then((user) => {
-          resolve(user)
-        })
-        .catch(err => reject(utils.error(err, 500)));
-    } else {
-      reject(utils.error("Can't retrieve spotify/user/me", 500))
-    }
+    const query = { _id: _id };
+    const update = {
+      "spotify.token.access_token": json.access_token,
+      "spotify.token.expires_in": json.expires_in,
+      "spotify.token.scope": json.scope,
+    };
+    const options = { new: true, upsert: true, useFindAndModify: false };
+    await User.findOneAndUpdate(query, update, options)
+      .then((user) => {
+        resolve(user)
+      })
+      .catch(err => reject(utils.error(err, 500)));
   })
 }

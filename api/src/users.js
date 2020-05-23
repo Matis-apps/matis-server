@@ -111,8 +111,6 @@ function registerSpotify(req, code) {
       },
     };
 
-    console.log(requestBody, options)
-
     const request = https.request(options, response => {
       // Event when receiving the data
       var responseBody = "";
@@ -149,15 +147,9 @@ function registerSpotify(req, code) {
   })
 }
 
-
 function saveSpotify(req, json) {
-  console.log("req.user", req.user)
-  console.log("json", json)
   return new Promise(async (resolve, reject) => {
-
     const me = await spotifyMe(json.access_token);
-    console.log("me", me)
-
     if (me) {
       const query = { _id: req.user._id };
       const update = { 
@@ -167,11 +159,8 @@ function saveSpotify(req, json) {
         } 
       };
       const options = { new: true, upsert: true, useFindAndModify: false };
-
-      console.log(query, update)
       await User.findOneAndUpdate(query, update, options)
         .then((user) => {
-          console.log("user", user)
           resolve(user)
         })
         .catch(err => reject(utils.error(err, 500)));

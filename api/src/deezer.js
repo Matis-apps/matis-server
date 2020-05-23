@@ -1175,6 +1175,7 @@ function formatAlbumToStandard(album){
     // Related to the author
     id: album.id,
     name: album.title,
+    type: album.record_type,
     picture: album.cover,
     link: album.link,
     upc: album.upc || null,
@@ -1200,6 +1201,15 @@ function formatPlaylistToStandard(playlist){
 }
 
 function formatTrackToStandard(track){
+  var artists = [];
+  if (track.artist) {
+    artists.push(formatArtistToStandard(track.artist));
+    if (track.contributors) {
+      var contributors = track.contributors ? track.contributors.map(a => formatArtistToStandard(a)) : [];
+      artists = [... contributors];
+    }
+  }
+
   return {
     _obj: 'track',
     _uid: 'deezer-'+track.type+'-'+track.id,
@@ -1210,7 +1220,7 @@ function formatTrackToStandard(track){
     isrc: track.isrc || null,
     preview: track.preview,
     duration: track.duration ? timestampToTime(track.duration) : null,
-    artist: formatArtistToStandard(track.artist)
+    artist: artists
   };
 }
 
