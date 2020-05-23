@@ -342,11 +342,11 @@ async function fetchAlbums(user_id = 'me', access_token) {
 }
 
 /**
- * getAlbums
+ * fetchAlbums
  * @params user_id
  * @params access_token
  */
-async function getAlbums(user_id = 'me', access_token) {
+async function fetchAlbums(user_id = 'me', access_token) {
   return new Promise((resolve, reject) => {
     fetchAlbums(user_id, access_token)
       .then(result => {
@@ -357,10 +357,10 @@ async function getAlbums(user_id = 'me', access_token) {
 }
 
 /**
- * getAlbum
+ * fetchAlbum
  * @params id
  */
-async function getAlbum(id) {
+async function fetchAlbum(id) {
 
   var album;
   var callError;
@@ -506,6 +506,50 @@ async function getPlaylists(user_id = 'me', access_token) {
   });
 }
 
+
+/**
+ * fetchTrack
+ * @params id
+ */
+async function fetchTrack(id) {
+
+  var track;
+  var callError;
+  var retry = retry_limit;
+
+  // get the general data of the artist
+  do {
+    const options = {
+        hostname: 'api.deezer.com',
+        path: '/track/'+id,
+        method: 'GET',
+        headers: {
+          'content-type': 'text/json'
+        },
+      };
+
+    const call = await httpsCall(options) // await for the response
+      .catch(err => { // catch if error
+        callError = err;
+        retry--;
+      });
+
+    if(call) {
+      track = call; // push the data in the response
+    } else {
+      await sleep(retry_timeout);
+    }
+  } while (!track && retry > 0); // loop while there is another page
+  
+  return new Promise((resolve, reject) => {
+    if (track) {
+      resolve(track);
+    } else {
+      reject(callError);
+    }
+  })
+}
+
 /**
  * getMyReleases
  * @params user_id
@@ -631,7 +675,7 @@ async function getReleases(user_id, access_token) {
       });
 
       if (! existingAlbum) {
-        releases.push(formatAlbumToFeed(a));
+        releases.push(formatAbumToFeed(a));
       }
     });
   }
@@ -659,7 +703,7 @@ async function getReleaseContent(obj, id) {
   return new Promise((resolve, reject) => {
     if(obj === 'album') {
       // retrieve the general content
-      const promise = getAlbum(id)
+      const promise = fetchAlbum(id)
         .then((response) => {
           return formatAlbumToFeed(response);
         }).catch(err => reject(err));
@@ -998,6 +1042,8 @@ async function fetchSearch(type, query, strict) {
 async function getSearch(query, types = "*", strict = true) {
   const allowedTypes = ['artist', 'album', 'playlist', 'track', 'user'];
   var search_types = [];
+  var results = new Object, countResults = 0;
+  var callError;
 
   if (types == "*") {
     search_types = allowedTypes;
@@ -1009,44 +1055,95 @@ async function getSearch(query, types = "*", strict = true) {
     }
   }
 
-  var results = new Object, countResults = 0;
-  await utils.asyncForEach(search_types, async (type) => {
-    await fetchSearch(type, query, strict)
-      .then((result) => {
+  if (search_types.length > 0) {
+    await utils.asyncForEach(search_types, async (type) => {
+      await fetchSearch(type, query, strict)
+        .then((result) => {
+          switch(type) {
+            case 'artist':
+              results.artist = result.data.map(i => formatArtistToStandard(i));
+              //results.artist = result.data;
+              break;
+            case 'album':
+              results.album = result.data.map(i => formatAlbumToStandard(i));
+              //results.album = result.data;
+              break;
+            case 'playlist':
+              //results.playlist = result.data.map(i => formatTrackToStandard(i));
+              results.playlist = result.data.map(i => formatPlaylistToStandard(i));
+              break;
+            case 'track':
+              results.track = result.data.map(i => formatTrackToStandard(i));
+              break;
+            case 'user':
+              results.user = result.data.map(i => formatUserToStandard(i));
+              break;
+          }
+          countResults += result.data.length || 0;
+        })
+    })
+    results.total = countResults;
+
+    if (strict) {
+      results.total = 0;
+      await utils.asyncForEach(search_types, async (type) => {
         switch(type) {
           case 'artist':
-            results.artist = result.data.map(i => formatArtistToStandard(i));
-            //results.artist = result.data;
+            if (results.artist) {
+              results.artist = results.artist.filter(item => item.name.toUpperCase() == query.toUpperCase())
+              results.total += results.artist.length;
+            }
             break;
           case 'album':
-            results.album = result.data.map(i => formatAlbumToStandard(i));
-            //results.album = result.data;
-            break;
-          case 'playlist':
-            //results.playlist = result.data.map(i => formatTrackToStandard(i));
-            results.playlist = result.data.map(i => formatPlaylistToStandard(i));
+            if (results.album) {
+              await Promise
+                .all(results.album.map(a => fetchAlbum(a.id).catch(err => callError = err)))
+                .then(albums => {
+                  results.album = albums.map(i => formatAlbumToStandard(i))
+                  results.total += results.album.length;
+                }).catch(err => callError = err);
+            }
             break;
           case 'track':
-            results.track = result.data.map(i => formatTrackToStandard(i));
+            if (results.track) {
+              await Promise
+                .all(results.track.map(t => fetchTrack(t.id).catch(err => callError = err)))
+                .then(tracks => {
+                  results.track = tracks.map(i => formatTrackToStandard(i))
+                  results.total += results.tracks.length;
+                }).catch(err => callError = err);
+            }
             break;
           case 'user':
-            results.user = result.data.map(i => formatUserToStandard(i));
+            if (results.user) {
+              results.user = results.user.filter(item => item.name.toUpperCase() == query.toUpperCase())
+              results.total += results.user.length;
+            }
             break;
         }
-        countResults += result.data.length || 0;
       })
-  })
-  results.total = countResults;
+    }
+  } else {
+    callError = utils.error("Bad t paramater", 400)
+  }
 
   return new Promise((resolve, reject) => {
-    resolve(results)
+    if (countResults == 0) {
+      if (callError) {
+        reject(callError)
+      } else {
+        reject(utils.error("No content", 200))
+      }
+    } else {
+      resolve(results)
+    }
   })
 }
 
 ////////////////////////
 // FORMAT TO STANDARD //
 ////////////////////////
-function formatArtistToStandard(artist){
+function formatArtistToStandard(artist) {
   return {
     _obj: 'artist',
     _uid: 'deezer-'+artist.type+'-'+artist.id,
@@ -1063,6 +1160,15 @@ function formatArtistToStandard(artist){
 }
 
 function formatAlbumToStandard(album){
+  var artists = [];
+  if (album.artist) {
+    artists.push(formatArtistToStandard(album.artist));
+    if (album.contributors) {
+      var contributors = album.contributors ? album.contributors.map(a => formatArtistToStandard(a)) : [];
+      artists = [... contributors];
+    }
+  }
+
   return {
     _obj: 'album',
     _uid: 'deezer-'+album.record_type+'-'+album.id,
@@ -1071,6 +1177,8 @@ function formatAlbumToStandard(album){
     name: album.title,
     picture: album.cover,
     link: album.link,
+    upc: album.upc || null,
+    artists: artists,
     updated_at: album.release_date,
     added_at: album.time_add ? timestampToDate(album.time_add) : null,
   };
@@ -1099,6 +1207,7 @@ function formatTrackToStandard(track){
     id: track.id,
     name: track.title,
     link: track.link,
+    isrc: track.isrc || null,
     preview: track.preview,
     duration: track.duration ? timestampToTime(track.duration) : null,
     artist: formatArtistToStandard(track.artist)
@@ -1253,7 +1362,7 @@ function timestampToTime(seconds) {
 exports.getArtists = getArtists;
 exports.getRelatedArtists = getRelatedArtists;
 exports.getArtist = getArtist;
-exports.getAlbums = getAlbums;
+exports.fetchAlbums = fetchAlbums;
 exports.getPlaylists = getPlaylists;
 exports.getMyReleases = getMyReleases;
 exports.getReleases = getReleases;
