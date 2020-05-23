@@ -1,7 +1,9 @@
 const https = require('https');
 const utils = require('../../utils');
+const qs = require('querystring');
 const User = require('mongoose').model('User');
 const deezerMe = require('./deezer').getMeAccount;
+const spotifyMe = require('./spotify').getMeAccount;
 
 function me(req) {
   return new Promise((resolve, reject) => {
@@ -22,7 +24,7 @@ function registerDeezer(req, code) {
   return new Promise(async (resolve, reject) => {
 
     const host = "https://connect.deezer.com";
-    const path = "/oauth/access_token.php?app_id="+ process.env.VUE_APP_DEEZER_APP_ID +"&secret="+ process.env.VUE_APP_DEEZER_SECRET +"&code=" + code + "&output=json";
+    const path = "/oauth/access_token.php?app_id="+ process.env.DEEZER_APP_ID +"&secret="+ process.env.DEEZER_SECRET +"&code=" + code + "&output=json";
     
     await https.get(host + path, response => {
       // Event when receiving the data
@@ -88,7 +90,98 @@ function saveDeezer(req, json) {
   })
 }
 
+
+function registerSpotify(req, code) {
+  return new Promise(async (resolve, reject) => {
+
+    const requestBody = qs.stringify({
+      grant_type: 'authorization_code',
+      code: code,
+      redirect_uri: 'http://113b7a68.ngrok.io/account?from=spotify',
+    });
+
+    const options = {
+      hostname: 'accounts.spotify.com',
+      path: '/api/token',
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + Buffer.from(process.env.SPOTIFY_CLIENT_ID+':'+process.env.SPOTIFY_CLIENT_SECRET).toString('base64'),
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': requestBody.length
+      },
+    };
+
+    const request = https.request(options, response => {
+      // Event when receiving the data
+      var responseBody = "";
+      response.on('data', function(chunck) { responseBody += chunck });
+
+      // Event when the request is ending
+      response.on('end', async () => {
+        try {
+          let json = JSON.parse(responseBody)
+
+          if (!json) {
+            reject(utils.error("Unvalid json", 500));
+          } else {
+            if (response.statusCode === 200) {
+               await saveSpotify(req, json)
+                .then(user => resolve(user.spotify))
+                .catch(err => reject(err.message, 500))
+            } else if (json.error) {
+              reject(utils.error(json.error, response.statusCode));
+            } else {
+              reject(utils.error("Something whent wrong...", 500));
+            }
+          }
+        } catch (e) {
+          reject(utils.error(e + " - " + responseBody, 500));
+        }
+      })
+    })
+    request.write(requestBody);
+    request.on('error', (e) => {
+      reject(utils.error(e.message, 500));
+    });
+    request.end();
+  })
+}
+
+
+function saveSpotify(req, json) {
+  console.log("req.user", req.user)
+  console.log("json", json)
+  return new Promise(async (resolve, reject) => {
+
+    const me = await spotifyMe(json.access_token);
+    console.log("me", me)
+
+    if (me) {
+      const query = { _id: req.user._id };
+      const update = { 
+        spotify: {
+          account: me,
+          token: json,
+        } 
+      };
+      const options = { new: true, upsert: true, useFindAndModify: false };
+
+      console.log(query, update)
+      await User.findOneAndUpdate(query, update, options)
+        .then((user) => {
+          console.log("user", user)
+          resolve(user)
+        })
+        .catch(err => reject(utils.error(err, 500)));
+    } else {
+      reject(utils.error("Can't retrieve spotify/user/me", 500))
+    }
+  })
+}
+
+
 exports.me = me;
 exports.accounts = accounts;
 exports.registerDeezer = registerDeezer;
+exports.registerSpotify = registerSpotify;
 

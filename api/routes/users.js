@@ -33,4 +33,18 @@ router.get('/token/deezer', (req, res, next) => {
   }
 });
 
+router.get('/token/spotify', (req, res, next) => {
+  var code = req.query.code;
+
+  if (code) {
+    users.registerSpotify(req, code).then(data => {
+      res.status(200).json({
+        data,
+      })
+    }).catch(err => next(err));
+  } else {
+    next(utils.error("Missing code", 400))
+  }
+});
+
 module.exports = router;

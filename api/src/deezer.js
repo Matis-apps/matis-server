@@ -1221,6 +1221,7 @@ function formatUserToStandard(user){
     // Related to the author
     id: user.id,
     name: user.name,
+    profile: user.link,
     fullname: user.firstname && user.lastname ? user.firstname + ' ' + user.lastname : null,
     picture: user.picture,
   };
