@@ -97,7 +97,7 @@ function registerSpotify(req, code) {
     const requestBody = qs.stringify({
       grant_type: 'authorization_code',
       code: code,
-      redirect_uri: 'http://113b7a68.ngrok.io/account?from=spotify',
+      redirect_uri: process.env.APP_URL + '/account?from=spotify',
     });
 
     const options = {
@@ -110,6 +110,8 @@ function registerSpotify(req, code) {
         'Content-Length': requestBody.length
       },
     };
+
+    console.log(requestBody, options)
 
     const request = https.request(options, response => {
       // Event when receiving the data
