@@ -3,6 +3,7 @@ const router = express.Router();
 
 const deezer = require('../src/deezer');
 
+const utils = require('../../utils');
 
 router.get('/me/releases', (req, res, next) => {
   deezer.getMyReleases(req.deezer_token).then(data => {
@@ -53,6 +54,22 @@ router.get('/me/social', (req, res, next) => {
       'countFollowings': data.followings ? data.followings.length : 0,
     })
   }).catch(err => next(err));
+});
+
+router.get('/search', (req, res, next) => {
+  if (!req.query.q) {
+    next(utils.error("Missing q parameter", 400));
+  } else {
+    const query = req.query.q;
+    const types = req.query.t || '*';
+    const strict = req.query.s || true;
+
+    deezer.getSearch(query, types, strict).then(data => {
+      res.status(200).json({
+        'data': data,
+      })
+    }).catch(err => next(err));
+  }
 });
 
 module.exports = router;

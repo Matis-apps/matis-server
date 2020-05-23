@@ -23,6 +23,7 @@ const httpsCall = async function(options) {
         if (response.statusCode === 200) {
           try {
             let json = JSON.parse(responseBody)
+
             if (!json) { // json is undefined or null
               reject(utils.error("Unvalid json", 500));
             } else if (json.error) { // json has an error (set by Deezer)
@@ -516,7 +517,6 @@ async function getMyReleases(access_token) {
   var callError;
 
   const artists = await fetchArtists(user_id, access_token).catch(err => callError = err);
-
   if(artists && artists.length > 0) {
     await Promise
       .all(artists.map(a => 
@@ -530,7 +530,6 @@ async function getMyReleases(access_token) {
         })
       }).catch(err => callError = err);
   }
-
   var genres = [];
   genres.push({key: -42, value: "Tous"})
   if(artists && artists.length > 0) {
@@ -561,7 +560,11 @@ async function getMyReleases(access_token) {
 
   return new Promise((resolve, reject) => {
     if (releases.length == 0) {
-      reject(utils.error("No content"), 200);
+      if (callError) {
+        reject(callError);
+      } else {
+        reject(utils.error("No content"), 200);
+      }
     } else {
       releases.sort((a,b) => sortLastReleases(a,b));
       resolve(releases)
@@ -635,7 +638,11 @@ async function getReleases(user_id, access_token) {
 
   return new Promise((resolve, reject) => {
     if (releases.length == 0) {
-      reject(utils.error("No content"), 200);
+      if (callError) {
+        reject(callError);
+      } else {
+        reject(utils.error("No content"), 200);
+      }
     } else {
       releases.sort((a,b) => sortLastReleases(a,b));
       resolve(releases)
@@ -712,7 +719,11 @@ async function getGenres() {
   
   return new Promise((resolve, reject) => {
     if (genres.length == 0) {
-      reject(utils.error("No content"), 200);
+      if (callError) {
+        reject(callError);
+      } else {
+        reject(utils.error("No content"), 200);
+      }
     } else {
       resolve(genres)
     }
@@ -941,6 +952,97 @@ async function getSocialFriends(user_id, access_token) {
     });
 }
 
+async function fetchSearch(type, query, strict) {
+  var search;
+  var callError;
+  var retry = retry_limit;
+
+  // get the general data of the artist
+  do {
+    const options = {
+        hostname: 'api.deezer.com',
+        // artist?q=eminem
+        path: '/search/'+type+'?q='+encodeURI(query)+(strict == true ? '&sort=ranking&strict=on':''),
+        method: 'GET',
+        headers: {
+          'content-type': 'text/json'
+        },
+      };
+
+    const call = await httpsCall(options) // await for the response
+      .catch(err => { // catch if error
+        callError = err;
+        retry--;
+      });
+
+    if(call) {
+      search = call;
+    } else {
+      await sleep(retry_timeout);
+    }
+  } while (!search && retry > 0); // loop while there is another page
+  
+  return new Promise((resolve, reject) => {
+    if (!search) {
+      if (callError) {
+        reject(callError);
+      } else {
+        reject(utils.error("No content", 200));
+      }
+    } else {
+      resolve(search)
+    }
+  })
+}
+
+async function getSearch(query, types = "*", strict = true) {
+  const allowedTypes = ['artist', 'album', 'playlist', 'track', 'user'];
+  var search_types = [];
+
+  if (types == "*") {
+    search_types = allowedTypes;
+  } else {
+    if (types.includes(",")) {
+      search_types = allowedTypes.filter(i => types.split(",").includes(i));
+    } else {
+      search_types = allowedTypes.filter(item => item == types);
+    }
+  }
+
+  var results = new Object, countResults = 0;
+  await utils.asyncForEach(search_types, async (type) => {
+    await fetchSearch(type, query, strict)
+      .then((result) => {
+        switch(type) {
+          case 'artist':
+            results.artist = result.data.map(i => formatArtistToStandard(i));
+            //results.artist = result.data;
+            break;
+          case 'album':
+            results.album = result.data.map(i => formatAlbumToStandard(i));
+            //results.album = result.data;
+            break;
+          case 'playlist':
+            //results.playlist = result.data.map(i => formatTrackToStandard(i));
+            results.playlist = result.data.map(i => formatPlaylistToStandard(i));
+            break;
+          case 'track':
+            results.track = result.data.map(i => formatTrackToStandard(i));
+            break;
+          case 'user':
+            results.user = result.data.map(i => formatUserToStandard(i));
+            break;
+        }
+        countResults += result.data.length || 0;
+      })
+  })
+  results.total = countResults;
+
+  return new Promise((resolve, reject) => {
+    resolve(results)
+  })
+}
+
 ////////////////////////
 // FORMAT TO STANDARD //
 ////////////////////////
@@ -992,7 +1094,7 @@ function formatPlaylistToStandard(playlist){
 function formatTrackToStandard(track){
   return {
     _obj: 'track',
-    _uid: 'deezer-'+track.type,
+    _uid: 'deezer-'+track.type+'-'+track.id,
     // Related to the author
     id: track.id,
     name: track.title,
@@ -1159,3 +1261,4 @@ exports.getReleaseContent = getReleaseContent;
 exports.getGenres = getGenres;
 exports.getMeAccount = getMeAccount;
 exports.getSocialFriends = getSocialFriends;
+exports.getSearch = getSearch;
