@@ -633,14 +633,11 @@ async function getSearch(query, types = "*", strict = true) {
           switch(type) {
             case 'artist':
               results.artist = result.data.map(i => formatArtistToStandard(i));
-              //results.artist = result.data;
               break;
             case 'album':
               results.album = result.data.map(i => formatAlbumToStandard(i));
-              //results.album = result.data;
               break;
             case 'playlist':
-              //results.playlist = result.data.map(i => formatTrackToStandard(i));
               results.playlist = result.data.map(i => formatPlaylistToStandard(i));
               break;
             case 'track':
@@ -656,13 +653,13 @@ async function getSearch(query, types = "*", strict = true) {
     results.total = countResults;
 
     if (strict) {
-      results.total = 0;
+      countResults = 0;
       await utils.asyncForEach(search_types, async (type) => {
         switch(type) {
           case 'artist':
             if (results.artist) {
               results.artist = results.artist.filter(item => item.name.toUpperCase() == query.toUpperCase())
-              results.total += results.artist.length;
+              countResults += results.artist.length;
             }
             break;
           case 'album':
@@ -671,7 +668,7 @@ async function getSearch(query, types = "*", strict = true) {
                 .all(results.album.map(a => fetchAlbum(a.id).catch(err => callError = err)))
                 .then(albums => {
                   results.album = albums.map(i => formatAlbumToStandard(i))
-                  results.total += results.album.length;
+                  countResults += results.album.length;
                 }).catch(err => callError = err);
             }
             break;
@@ -681,18 +678,19 @@ async function getSearch(query, types = "*", strict = true) {
                 .all(results.track.map(t => fetchTrack(t.id).catch(err => callError = err)))
                 .then(tracks => {
                   results.track = tracks.map(i => formatTrackToStandard(i))
-                  results.total += results.tracks.length;
+                  countResults += results.tracks.length;
                 }).catch(err => callError = err);
             }
             break;
           case 'user':
             if (results.user) {
               results.user = results.user.filter(item => item.name.toUpperCase() == query.toUpperCase())
-              results.total += results.user.length;
+              countResults += results.user.length;
             }
             break;
         }
       })
+      results.total = countResults;
     }
   } else {
     callError = utils.error("Bad t paramater", 400)

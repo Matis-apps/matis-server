@@ -47,16 +47,17 @@ const httpsCall = async function(options) {
   })
 }
 
-async function getMeAccount(access_token) {
-  var me;
-  var callError;
-  var retry = retry_limit;
+function genericHttps(path, access_token) {
+  return new Promise(async (resolve, reject) => {
+    var result = null;
+    var error = null;
+    var retry = retry_limit;
 
-  // get the general data of the artist
-  do {
-    const options = {
+    // get the general data of the artist
+    do {
+      const options = {
         hostname: 'api.spotify.com',
-        path: '/v1/me',
+        path: path,
         method: 'GET',
         headers: {
           'Authorization': 'Bearer '+access_token,
@@ -64,74 +65,101 @@ async function getMeAccount(access_token) {
         },
       };
 
-    const call = await httpsCall(options) // await for the response
-      .catch(err => { // catch if error
-        callError = err;
-        retry--;
-      });
+      const call = await httpsCall(options) // await for the response
+        .catch(err => { // catch if error
+          callError = err;
+          retry--;
+        });
 
-    if(call) {
-      me = call;
-    } else {
-      await sleep(retry_timeout);
-    }
-  } while (!me && retry > 0); // loop while there is another page
-  
-  return new Promise((resolve, reject) => {
-    if (!me) {
-      if (callError) {
-        reject (callError)
+      if(call) {
+        result = call; // push the data in the response
       } else {
-        reject(utils.error("No content"), 200);
+        await sleep(retry_timeout);
       }
+    } while (!result && retry > 0); // loop while there is another page
+
+    if (result) {
+      resolve(result);
+    } else if (callError) {
+      reject(callError);
     } else {
-      resolve(formatUserToStandard(me))
+      reject(utils.error("Something went wrong..."));
     }
   })
 }
 
-async function fetchSearch(access_token, type, query, strict) {
-  var search;
-  var callError;
-  var retry = retry_limit;
-
-  // get the general data of the artist
-  do {
-    const options = {
+function recursiveHttps(path, access_token) {
+  return new Promise((resolve, reject) => {
+    var result = [];
+    /**
+     * recursive Fill the result array and handle the pagination recursively
+     * @params index
+     * @params retry
+     */
+    let recursive = async function (index = 0, retry = retry_limit) {
+      // Configuration of the https request
+      const options = {
         hostname: 'api.spotify.com',
-        // artist?q=eminem
-        path: '/v1/search?type='+type+'&q='+encodeURI(query),
+        path: path + 'offset=' + index + '&limit='+call_limit,
         method: 'GET',
         headers: {
           'Authorization': 'Bearer '+access_token,
-          'Content-Type': 'text/json'
+          'content-type': 'text/json'
         },
       };
 
-    const call = await httpsCall(options) // await for the response
-      .catch(err => { // catch if error
-        callError = err;
-        retry--;
-      });
+      httpsCall(options)
+        .then(response => { // response is ok, push the result in array
+          Array.prototype.push.apply(result, response.data)
+          if(response.next) { // if has a next object, keep going
+            recursive(index+call_limit)
+              .catch(() => resolve(result)); // resolve the iterations if an error happens
+          } else { // no more page, resolve with the result
+            resolve(result);
+          }
+        })
+        .catch(error => {
+          if (retry > 0 && error.code == 4) { // too many request and still have a retry, so wait for a delay and get back
+            setTimeout(recursive, retry_timeout, index, retry-1);
+          } else {
+            if(result.length == 0) { // if there's no playlist retrieved, reject with the error
+              reject(utils.error(error.message, 500));              
+            } else { // otherwise, best-effort mode
+              resolve(result);
+            }
+          }
+        });
+    };
 
-    if(call) {
-      search = call;
-    } else {
-      await sleep(retry_timeout);
-    }
-  } while (!search && retry > 0); // loop while there is another page
-  
-  return new Promise((resolve, reject) => {
-    if (!search) {
-      if (callError) {
-        reject(callError);
-      } else {
-        reject(utils.error("No content", 200));
-      }
-    } else {
-      resolve(search)
-    }
+    recursive()
   })
+}
+
+
+async function getMeAccount(access_token) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/me/';
+    genericHttps(path, access_token)
+      .then(result => {
+        resolve(result)
+      })
+      .catch(error => {
+        reject(error)
+      })
+  });
+}
+
+async function fetchSearch(access_token, type, query, strict) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/search?type='+type+'&q='+encodeURI(query);
+    genericHttps(path, access_token)
+      .then(result => {
+        resolve(result)
+      })
+      .catch(error => {
+        reject(error)
+      })
+  });
 }
 
 async function getSearch(access_token, query, types = "*", strict = true) {
@@ -156,23 +184,19 @@ async function getSearch(access_token, query, types = "*", strict = true) {
         .then((result) => {
           switch(type) {
             case 'artist':
-              //results.artist = result.artists.items;
               results.artist = result.artists.items.map(i => formatArtistToStandard(i));
               countResults += results.artist.length || 0;
 
               break;
             case 'album':
-              //results.album = result.albums.items;
               results.album = result.albums.items.map(i => formatAlbumToStandard(i));
               countResults += results.album.length || 0;
               break;
             case 'playlist':
-              //results.playlist = result.playlists.items;
               results.playlist = result.playlists.items.map(i => formatPlaylistToStandard(i));
               countResults += results.playlist.length || 0;
               break;
             case 'track':
-              //results.track = result.tracks.items;
               results.track = result.tracks.items.map(i => formatTrackToStandard(i));
               countResults += results.track.length || 0;
               break;
@@ -195,32 +219,30 @@ async function getSearch(access_token, query, types = "*", strict = true) {
           case 'album':
             if (results.album) {
               await Promise
-                .all(results.album.map(a => fetchAlbum(a.id).catch(err => callError = err)))
+                .all(results.album.map(a => fetchAlbum(a.id, access_token).catch(err => callError = err)))
                 .then(albums => {
                   results.album = albums.map(i => formatAlbumToStandard(i))
                   countResults += results.album.length;
                 }).catch(err => callError = err);
             }
             break;
+          case 'playlist':
+              results.playlist = results.playlist.filter(item => item.name.toUpperCase() == query.toUpperCase())
+              countResults += results.playlist.length || 0;
+              break;
           case 'track':
             if (results.track) {
               await Promise
-                .all(results.track.map(t => fetchTrack(t.id).catch(err => callError = err)))
+                .all(results.track.map(t => fetchTrack(t.id, access_token).catch(err => callError = err)))
                 .then(tracks => {
                   results.track = tracks.map(i => formatTrackToStandard(i))
-                  countResults += results.tracks.length;
+                  countResults += results.track.length;
                 }).catch(err => callError = err);
-            }
-            break;
-          case 'user':
-            if (results.user) {
-              results.user = results.user.filter(item => item.name.toUpperCase() == query.toUpperCase())
-              countResults += results.user.length;
             }
             break;
         }
       })
-      results.total = 0;
+      results.total = countResults;
     }
   } else {
     callError = utils.error("Bad t paramater", 400)
@@ -237,6 +259,36 @@ async function getSearch(access_token, query, types = "*", strict = true) {
       resolve(results)
     }
   })
+}
+
+/**
+ * fetchAlbum
+ * @params id
+ */
+function fetchAlbum(id, access_token) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/albums/'+id;
+    genericHttps(path, access_token)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
+}
+
+/**
+ * fetchTrack
+ * @params id
+ */
+function fetchTrack(id, access_token) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/tracks/'+id;
+    genericHttps(path, access_token)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
 }
 
 ////////////////////////
@@ -290,7 +342,7 @@ function formatPlaylistToStandard(playlist){
   };
 }
 
-function formatTrackToStandard(track){
+function formatTrackToStandard(track){  
   return {
     _obj: 'track',
     _uid: 'spotify-'+track.type+'-'+track.id,
@@ -300,7 +352,7 @@ function formatTrackToStandard(track){
     link: track.external_urls.spotify ? track.external_urls.spotify : "https://open.spotify.com/track/"+track.id,
     isrc: track.external_ids.isrc || null,
     preview: track.preview_url,
-    duration: track.duration ? timestampToTime(track.duration) : null,
+    duration: track.duration_ms ? timestampToTime(track.duration_ms) : null,
     artist: track.artists.map(i => formatArtistToStandard(i))
   };
 }
@@ -361,11 +413,11 @@ function sortFriends ( a, b ) {
 }
 
 function timestampToDate(seconds) {
-  return moment.unix(seconds).format("YYYY-MM-DD");
+  return moment.unix(seconds/1000).format("YYYY-MM-DD");
 }
 
 function timestampToTime(seconds) {
-  return moment.unix(seconds).format("mm:ss");
+  return moment.unix(seconds/1000).format("mm:ss");
 }
 
 exports.getMeAccount = getMeAccount;
