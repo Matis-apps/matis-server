@@ -678,7 +678,7 @@ async function getSearch(query, types = "*", strict = true) {
                 .all(results.track.map(t => fetchTrack(t.id).catch(err => callError = err)))
                 .then(tracks => {
                   results.track = tracks.map(i => formatTrackToStandard(i))
-                  countResults += results.tracks.length;
+                  countResults += results.track.length;
                 }).catch(err => callError = err);
             }
             break;
@@ -707,6 +707,95 @@ async function getSearch(query, types = "*", strict = true) {
       resolve(results)
     }
   })
+}
+
+function searchAlbumUPC(query, upc) {
+  return new Promise(async (resolve, reject) => {
+
+    var album = null;
+    var error = null;
+    var index = 0;
+    var total = call_limit;
+    var retry = retry_limit;
+    var limit = call_limit/2; // improve the performances due to fullAlbums.filter
+    
+    do {
+      const path = '/search/album?limit=' + limit + '&index=' + index + '&q='+encodeURI(query);
+      let albums = await genericHttps(path).catch(err => error = err);
+
+      if(albums && albums.data) {
+        total = albums.total;
+        let fullAlbums = await Promise
+          .all(albums.data.map(a => fetchAlbum(a.id)))
+          .then(albums => { return albums })
+          .catch(err => {
+            retry--;
+            error = err;
+          });
+        if (fullAlbums) {
+          error = null;
+          index+=limit;
+          album = fullAlbums.filter(a => a.upc == upc);
+          album = album[0] ? formatAlbumToStandard(album[0]) : null;
+        } else if(error) {
+          await sleep(retry_timeout); 
+        }
+      }
+    } while (!album && retry > 0 && total > index)
+
+    if (album) {
+      resolve(album)
+    } else if (error) {
+      reject(error)
+    } else {
+      reject(utils.error("Not found", 200))
+    }
+  });
+}
+
+
+function searchTrackISRS(query, isrc) {
+  return new Promise(async (resolve, reject) => {
+
+    var track = null;
+    var error = null;
+    var index = 0;
+    var total = call_limit;
+    var retry = retry_limit;
+    var limit = call_limit/2; // improve the performances due to fullAlbums.filter
+
+    do {
+      const path = '/search/track?limit=' + limit + '&index=' + index + '&q='+encodeURI(query);
+      let tracks = await genericHttps(path).catch(err => error = err);
+
+      if(tracks && tracks.data) {
+        total = tracks.total;
+        let fullTracks = await Promise
+          .all(tracks.data.map(t => fetchTrack(t.id)))
+          .then(tracks => { return tracks })
+          .catch(err => {
+            retry--;
+            error = err;
+          });
+        if (fullTracks) {      
+          error = null;
+          index+=limit;
+          track = fullTracks.filter(t => t.isrc == isrc);
+          track = track[0] ? formatTrackToStandard(track[0]) : null;
+        } else if(error) {
+          await sleep(retry_timeout); 
+        }
+      }
+    } while (!track && retry > 0 && total > index)
+
+    if (track) {
+      resolve(track)
+    } else if (error) {
+      reject(error)
+    } else {
+      reject(utils.error("Not found", 200))
+    }
+  });
 }
 
 ////////////////////////
@@ -950,3 +1039,5 @@ exports.getGenres = getGenres;
 exports.getMeAccount = getMeAccount;
 exports.getSocialFriends = getSocialFriends;
 exports.getSearch = getSearch;
+exports.searchAlbumUPC = searchAlbumUPC;
+exports.searchTrackISRS = searchTrackISRS;
