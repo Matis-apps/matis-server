@@ -11,7 +11,7 @@ const retry_timeout = 1800; // Limit number of retry
  * httpsCall Call the API end parse de response
  * @params options
  */
-const httpsCall = async function(options) {
+function httpsCall(options) {
   return new Promise((resolve, reject) => {
     var req = https.get(options, response => {
       // Event when receiving the data
@@ -44,18 +44,51 @@ const httpsCall = async function(options) {
   })
 }
 
-/**
- * fetchArtists
- * @params user_id
- * @params access_token
- */
-async function fetchArtists(user_id, access_token) {
+function genericHttps(path) {
+  return new Promise(async (resolve, reject) => {
+    var result = null;
+    var error = null;
+    var retry = retry_limit;
 
-  var artists = [];
-    
+    // get the general data of the artist
+    do {
+      const options = {
+          hostname: 'api.deezer.com',
+          path: path,
+          method: 'GET',
+          headers: {
+            'content-type': 'text/json'
+          },
+        };
+
+      const call = await httpsCall(options) // await for the response
+        .catch(err => { // catch if error
+          callError = err;
+          retry--;
+        });
+
+      if(call) {
+        result = call; // push the data in the response
+      } else {
+        await sleep(retry_timeout);
+      }
+    } while (!result && retry > 0); // loop while there is another page
+
+    if (result) {
+      resolve(result);
+    } else if (callError) {
+      reject(callError);
+    } else {
+      reject(utils.error("Something went wrong..."));
+    }
+  })
+}
+
+function recursiveHttps(path) {
   return new Promise((resolve, reject) => {
+    var result = [];
     /**
-     * recursive Fill the artists array and handle the pagination recursively
+     * recursive Fill the result array and handle the pagination recursively
      * @params index
      * @params retry
      */
@@ -63,7 +96,7 @@ async function fetchArtists(user_id, access_token) {
       // Configuration of the https request
       const options = {
         hostname: 'api.deezer.com',
-        path: '/user/'+user_id+'/artists?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
+        path: path + 'index=' + index + '&limit='+call_limit,
         method: 'GET',
         headers: {
           'content-type': 'text/json'
@@ -72,28 +105,46 @@ async function fetchArtists(user_id, access_token) {
 
       httpsCall(options)
         .then(response => { // response is ok, push the result in array
-          Array.prototype.push.apply(artists, response.data)
+          Array.prototype.push.apply(result, response.data)
           if(response.next) { // if has a next object, keep going
             recursive(index+call_limit)
-              .catch(() => resolve(artists)); // resolve the iterations if an error happens
+              .catch(() => resolve(result)); // resolve the iterations if an error happens
           } else { // no more page, resolve with the result
-            resolve(artists);
+            resolve(result);
           }
         })
-        .catch(err => {
-          if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
+        .catch(error => {
+          if (retry > 0 && error.code == 4) { // too many request and still have a retry, so wait for a delay and get back
             setTimeout(recursive, retry_timeout, index, retry-1);
           } else {
-            if(artists.length == 0) { // if there's no playlist retrieved, reject with the error
-              reject(err);              
+            if(result.length == 0) { // if there's no playlist retrieved, reject with the error
+              reject(utils.error(error.message, 500));              
             } else { // otherwise, best-effort mode
-              resolve(artists);
+              resolve(result);
             }
           }
         });
     };
 
     recursive()
+  })
+}
+
+/**
+ * fetchArtists
+ * @params user_id
+ * @params access_token
+ */
+function fetchArtists(user_id, access_token) {
+  return new Promise((resolve, reject) => {
+    const path = '/user/' + user_id + '/artists?access_token=' + access_token + '&';
+    recursiveHttps(path)
+      .then(result => {
+        resolve(result)
+      })
+      .catch(error => {
+        reject(error)
+      })
   });
 }
 
@@ -102,7 +153,7 @@ async function fetchArtists(user_id, access_token) {
  * @params user_id
  * @params access_token
  */
-async function getArtists(user_id = 'me', access_token) {
+function getArtists(user_id = 'me', access_token) {
   return new Promise((resolve, reject) => {
     fetchArtists(user_id, access_token)
       .then(result => {
@@ -116,57 +167,24 @@ async function getArtists(user_id = 'me', access_token) {
  * fetchArtist
  * @params id
  */
-async function fetchArtist(id) {
-
-  var artist;
-  var callError;
-  var retry = retry_limit;
-
-  // get the general data of the artist
-  do {
-    const options = {
-        hostname: 'api.deezer.com',
-        path: '/artist/'+id,
-        method: 'GET',
-        headers: {
-          'content-type': 'text/json'
-        },
-      };
-
-    const call = await httpsCall(options) // await for the response
-      .catch(err => { // catch if error
-        callError = err;
-        retry--;
-      });
-
-    if(call) {
-      artist = call; // push the data in the response
-    } else {
-      await sleep(retry_timeout);
-    }
-  } while (!artist && retry > 0); // loop while there is another page
-  
-  // get the albums of the artist
-  if (artist) {
-    const call = await fetchArtistAlbums(id) // await for the response
-      .then(response => {
-        return response.sort((a,b) => sortAlbums(a,b));
-      })
-      .then(albums => {
-        artist.albums = albums;
-      })
-      .catch(err => { // catch if error
-        callError = err;
-      });
-  }
-  
+function fetchArtist(id) {
   return new Promise((resolve, reject) => {
-    if (artist) {
-      resolve(artist);
-    } else {
-      reject(callError);
-    }
-  })
+    const path = '/artist/' + id;
+    genericHttps(path)
+      .then(result => {
+        return result
+      })
+      .then(async (artist) => {
+        await fetchArtistAlbums(id) // await for the response
+          .then(artistAlbums => {
+            artist.albums = artistAlbums.sort((a,b) => sortAlbums(a,b));
+            resolve(artist);
+          });
+      })
+      .catch(error => {
+        reject(error)
+      });
+  });
 }
 
 /**
@@ -174,51 +192,16 @@ async function fetchArtist(id) {
  * @params artist_id
  * @params access_token
  */
-async function fetchArtistAlbums(artist_id, access_token) {
-
-  var albums = [];
-
+function fetchArtistAlbums(artist_id, access_token) {
   return new Promise((resolve, reject) => {
-    /**
-     * recursive Fill the artists array and handle the pagination recursively
-     * @params index
-     * @params retry
-     */
-    let recursive = async function (index = 0, retry = retry_limit) {
-      // Configuration of the https request
-      const options = {
-        hostname: 'api.deezer.com',
-        path: '/artist/'+artist_id+'/albums?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
-        method: 'GET',
-        headers: {
-          'content-type': 'text/json'
-        },
-      };
-
-      httpsCall(options)
-        .then(response => { // response is ok, push the result in array
-          Array.prototype.push.apply(albums, response.data)
-          if(response.next) { // if has a next object, keep going
-            recursive(index+call_limit)
-              .catch(() => resolve(albums)); // resolve the iterations if an error happens
-          } else { // no more page, resolve with the result
-            resolve(albums);
-          }
-        })
-        .catch(err => {
-          if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
-            setTimeout(recursive, retry_timeout, index, retry-1);
-          } else {
-            if(albums.length == 0) { // if there's no playlist retrieved, reject with the error
-              reject(err);
-            } else { // otherwise, best-effort mode
-              // resolve(albums); // commented as it will block the others calls
-            }
-          }
-        });
-    };
-
-    recursive()
+    const path = '/artist/' + artist_id + '/albums?';
+    recursiveHttps(path)
+      .then(artistAlbums => {
+        resolve(artistAlbums);
+      })
+      .catch(error => {
+        reject(error)
+      });
   });
 }
 
@@ -226,7 +209,7 @@ async function fetchArtistAlbums(artist_id, access_token) {
  * getArtist
  * @params id
  */
-async function getArtist(id) {
+function getArtist(id) {
   return new Promise((resolve, reject) => {
     fetchArtist(id)
       .then(result => {
@@ -236,56 +219,34 @@ async function getArtist(id) {
   });
 }
 
-
 /**
  * getRelatedArtists
  * @params id
  */
-async function getRelatedArtists(id) {
-
-  var artists = [];
-  var callError;
-  var retry = retry_limit;
-
-  // get the general data of the artist
-  do {
-    const options = {
-        hostname: 'api.deezer.com',
-        path: '/artist/'+id+'/related',
-        method: 'GET',
-        headers: {
-          'content-type': 'text/json'
-        },
-      };
-
-    const call = await httpsCall(options) // await for the response
-      .catch(err => { // catch if error
-        callError = err;
-        retry--;
-      });
-
-    if(call) {
+function getRelatedArtists(id) {
+  const path = '/artist/' + id + '/related';
+  genericHttps(path)
+    .then(result => {
+      return result
+    })
+    .then(async (relatedArtists) => {
       await Promise
-        .all(call.data.map(a => fetchArtist(a.id)))
+        .all(relatedArtists.data.map(a => fetchArtist(a.id)))
         .then(results => {
+          var artists = [];
           results.forEach((a) => {
             if (a.albums && a.albums.length > 0) {            
               artists.push(formatArtistToFeed(a));
             }
           })
-        }).catch(err => callError = err);
-    } else {
-      await sleep(retry_timeout);
-    }
-  } while (!artists && retry > 0); // loop while there is another page
-  
-  return new Promise((resolve, reject) => {
-    if (artists) {
-      resolve(artists);
-    } else {
-      reject(callError);
-    }
-  })
+          return relatedArtistsFormated;
+        })
+        .then(relatedArtistsFormated =>  {
+          resolve(relatedArtistsFormated);
+        })
+        .catch(error => reject(error));
+    })
+    .catch(error => reject(error));
 }
 
 /**
@@ -293,60 +254,23 @@ async function getRelatedArtists(id) {
  * @params user_id
  * @params access_token
  */
-async function fetchAlbums(user_id = 'me', access_token) {
-
-  var albums = [];
-    
+function fetchAlbums(user_id = 'me', access_token) {
   return new Promise((resolve, reject) => {
-    /**
-     * recursive Fill the artists array and handle the pagination recursively
-     * @params index
-     * @params retry
-     */
-    let recursive = async function (index = 0, retry = retry_limit) {
-      // Configuration of the https request
-      const options = {
-        hostname: 'api.deezer.com',
-        path: '/user/'+user_id+'/albums?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
-        method: 'GET',
-        headers: {
-          'content-type': 'text/json'
-        },
-      };
-
-      httpsCall(options)
-        .then(response => { // response is ok, push the result in array
-          Array.prototype.push.apply(albums, response.data)
-          if(response.next) { // if has a next object, keep going
-            recursive(index+call_limit)
-              .catch(() => resolve(albums)); // resolve the iterations if an error happens
-          } else { // no more page, resolve with the result
-            resolve(artists);
-          }
-        })
-        .catch(err => {
-          if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
-            setTimeout(recursive, retry_timeout, index, retry-1);
-          } else {
-            if(albums.length == 0) { // if there's no playlist retrieved, reject with the error
-              reject(err);              
-            } else { // otherwise, best-effort mode
-              resolve(albums);
-            }
-          }
-        });
-    };
-
-    recursive()
+    const path = '/user/' + user_id + '/albums?access_token=' + access_token + '&';
+    recursiveHttps(path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
   });
 }
 
 /**
- * fetchAlbums
+ * getAlbums
  * @params user_id
  * @params access_token
  */
-async function fetchAlbums(user_id = 'me', access_token) {
+function getAlbums(user_id = 'me', access_token) {
   return new Promise((resolve, reject) => {
     fetchAlbums(user_id, access_token)
       .then(result => {
@@ -360,43 +284,15 @@ async function fetchAlbums(user_id = 'me', access_token) {
  * fetchAlbum
  * @params id
  */
-async function fetchAlbum(id) {
-
-  var album;
-  var callError;
-  var retry = retry_limit;
-
-  // get the general data of the artist
-  do {
-    const options = {
-        hostname: 'api.deezer.com',
-        path: '/album/'+id,
-        method: 'GET',
-        headers: {
-          'content-type': 'text/json'
-        },
-      };
-
-    const call = await httpsCall(options) // await for the response
-      .catch(err => { // catch if error
-        callError = err;
-        retry--;
-      });
-
-    if(call) {
-      album = call; // push the data in the response
-    } else {
-      await sleep(retry_timeout);
-    }
-  } while (!album && retry > 0); // loop while there is another page
-  
+function fetchAlbum(id) {
   return new Promise((resolve, reject) => {
-    if (album) {
-      resolve(album);
-    } else {
-      reject(callError);
-    }
-  })
+    const path = '/album/'+id;
+    genericHttps(path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
 }
 
 /**
@@ -404,47 +300,14 @@ async function fetchAlbum(id) {
  * @params user_id
  * @params access_token
  */
-async function fetchPlaylists(user_id = 'me', access_token) {
-
-  var playlists = [];
-  
+function fetchPlaylists(user_id = 'me', access_token) {  
   return new Promise((resolve, reject) => {
-    /**
-     * recursive Fill the playlists array and handle the pagination recursively
-     * @params index
-     * @params retry
-     */
-    let recursive = async function (index = 0, retry = retry_limit) {
-      // Configuration of the https request
-      const options = {
-        hostname: 'api.deezer.com',
-        path: '/user/'+user_id+'/playlists?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
-        method: 'GET',
-        headers: {
-          'content-type': 'text/json'
-        },
-      };
-
-      httpsCall(options)
-        .then(response => { // response is ok, push the result in array
-          Array.prototype.push.apply(playlists, response.data)
-          if(response.next) {
-            recursive(index+call_limit)
-              .catch(() => resolve(playlists)); // resolve the iterations if an error happens
-          } else { // no more page, resolve with the result
-            resolve(playlists);
-          }
-        })
-        .catch(err => {
-          if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
-            setTimeout(recursive, retry_timeout, index, retry-1);
-          } else {
-            resolve(playlists);
-          }
-        });
-    };
-
-    recursive()
+    const path = '/user/' + user_id + '/playlists?access_token=' + access_token + '&';
+    recursiveHttps(path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
   });
 }
 
@@ -452,102 +315,30 @@ async function fetchPlaylists(user_id = 'me', access_token) {
  * getPlaylistContent Return the artist content with its albums
  * @params id
  */
-async function getPlaylistContent(id) {
-
-  var content;
-  var callError;
-  var retry = retry_limit;
-
-  // get the general data of the artist
-  do {
-    const options = {
-        hostname: 'api.deezer.com',
-        path: '/playlist/'+id,
-        method: 'GET',
-        headers: {
-          'content-type': 'text/json'
-        },
-      };
-
-    const call = await httpsCall(options) // await for the response
-      .catch(err => { // catch if error
-        callError = err;
-        retry--;
-      });
-
-    if(call) {
-      content = call; // push the data in the response
-    } else {
-      await sleep(retry_timeout);
-    }
-  } while (!content && retry > 0); // loop while there is another page
-  
+function getPlaylistContent(id) {
   return new Promise((resolve, reject) => {
-    if (content) {
-      resolve(content);
-    } else {
-      reject(callError);
-    }
-  })
-}
-
-/**
- * getPlaylists
- * @params user_id
- * @params access_token
- */
-async function getPlaylists(user_id = 'me', access_token) {
-  return new Promise((resolve, reject) => {
-    fetchPlaylists(user_id, access_token)
+    const path = '/playlist/'+id;
+    genericHttps(path)
       .then(result => {
-        resolve(result.map(p => formatPlaylistToStandard(p)))
+        resolve(result);
       })
-      .catch(err => reject(err));
+      .catch(error => reject(error));
   });
 }
-
 
 /**
  * fetchTrack
  * @params id
  */
-async function fetchTrack(id) {
-
-  var track;
-  var callError;
-  var retry = retry_limit;
-
-  // get the general data of the artist
-  do {
-    const options = {
-        hostname: 'api.deezer.com',
-        path: '/track/'+id,
-        method: 'GET',
-        headers: {
-          'content-type': 'text/json'
-        },
-      };
-
-    const call = await httpsCall(options) // await for the response
-      .catch(err => { // catch if error
-        callError = err;
-        retry--;
-      });
-
-    if(call) {
-      track = call; // push the data in the response
-    } else {
-      await sleep(retry_timeout);
-    }
-  } while (!track && retry > 0); // loop while there is another page
-  
+function fetchTrack(id) {
   return new Promise((resolve, reject) => {
-    if (track) {
-      resolve(track);
-    } else {
-      reject(callError);
-    }
-  })
+    const path = '/track/'+id;
+    genericHttps(path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
 }
 
 /**
@@ -615,7 +406,6 @@ async function getMyReleases(access_token) {
     }
   });
 }
-
 
 /**
  * getReleases
@@ -699,7 +489,7 @@ async function getReleases(user_id, access_token) {
  * @params obj
  * @params id
  */
-async function getReleaseContent(obj, id) {
+function getReleaseContent(obj, id) {
   return new Promise((resolve, reject) => {
     if(obj === 'album') {
       // retrieve the general content
@@ -731,99 +521,14 @@ async function getReleaseContent(obj, id) {
  * getRelatedArtists
  * @params id
  */
-async function getGenres() {
-
-  var genres = [];
-  var callError;
-  var retry = retry_limit;
-
-  // get the general data of the artist
-  do {
-    const options = {
-        hostname: 'api.deezer.com',
-        path: '/genre',
-        method: 'GET',
-        headers: {
-          'content-type': 'text/json'
-        },
-      };
-
-    const call = await httpsCall(options) // await for the response
-      .catch(err => { // catch if error
-        callError = err;
-        retry--;
-      });
-
-    if(call) {
-      genres = call.data;
-    } else {
-      await sleep(retry_timeout);
-    }
-  } while (genres.length == 0 && retry > 0); // loop while there is another page
-  
+function getGenres() {
   return new Promise((resolve, reject) => {
-    if (genres.length == 0) {
-      if (callError) {
-        reject(callError);
-      } else {
-        reject(utils.error("No content"), 200);
-      }
-    } else {
-      resolve(genres)
-    }
-  })
-}
-
-/**
- * fetchFollowings
- * @params user_id
- * @params access_token
- */
-async function fetchFollowings(user_id, access_token) {
-
-  var followings = [];
-    
-  return new Promise((resolve, reject) => {
-    /**
-     * recursive Fill the artists array and handle the pagination recursively
-     * @params index
-     * @params retry
-     */
-    let recursive = async function (index = 0, retry = retry_limit) {
-      // Configuration of the https request
-      const options = {
-        hostname: 'api.deezer.com',
-        path: '/user/'+user_id+'/followings?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
-        method: 'GET',
-        headers: {
-          'content-type': 'text/json'
-        },
-      };
-
-      httpsCall(options)
-        .then(response => { // response is ok, push the result in array
-          Array.prototype.push.apply(followings, response.data)
-          if(response.next) { // if has a next object, keep going
-            recursive(index+call_limit)
-              .catch(() => resolve(followings)); // resolve the iterations if an error happens
-          } else { // no more page, resolve with the result
-            resolve(followings);
-          }
-        })
-        .catch(err => {
-          if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
-            setTimeout(recursive, retry_timeout, index, retry-1);
-          } else {
-            if(followings.length == 0) { // if there's no playlist retrieved, reject with the error
-              reject(err);              
-            } else { // otherwise, best-effort mode
-              resolve(followings);
-            }
-          }
-        });
-    };
-
-    recursive()
+    const path = '/genre';
+    genericHttps(path)
+      .then(result => {
+        resolve(result.data);
+      })
+      .catch(error => reject(error));
   });
 }
 
@@ -832,151 +537,49 @@ async function fetchFollowings(user_id, access_token) {
  * @params user_id
  * @params access_token
  */
-async function fetchFollowings(user_id, access_token) {
-
-  var followings = [];
-    
+function fetchFollowings(user_id, access_token) {
   return new Promise((resolve, reject) => {
-    /**
-     * recursive Fill the artists array and handle the pagination recursively
-     * @params index
-     * @params retry
-     */
-    let recursive = async function (index = 0, retry = retry_limit) {
-      // Configuration of the https request
-      const options = {
-        hostname: 'api.deezer.com',
-        path: '/user/'+user_id+'/followings?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
-        method: 'GET',
-        headers: {
-          'content-type': 'text/json'
-        },
-      };
-
-      httpsCall(options)
-        .then(response => { // response is ok, push the result in array
-          Array.prototype.push.apply(followings, response.data)
-          if(response.next) { // if has a next object, keep going
-            recursive(index+call_limit)
-              .catch(() => resolve(followings)); // resolve the iterations if an error happens
-          } else { // no more page, resolve with the result
-            resolve(followings);
-          }
-        })
-        .catch(err => {
-          if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
-            setTimeout(recursive, retry_timeout, index, retry-1);
-          } else {
-            if(followings.length == 0) { // if there's no playlist retrieved, reject with the error
-              reject(err);              
-            } else { // otherwise, best-effort mode
-              resolve(followings);
-            }
-          }
-        });
-    };
-
-    recursive()
+    const path = '/user/' + user_id + '/followings?access_token=' + access_token + '&';
+    recursiveHttps(path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
   });
 }
-
 
 /**
  * fetchFollowings
  * @params user_id
  * @params access_token
  */
-async function fetchFollowers(user_id, access_token) {
-
-  var followers = [];
-    
+function fetchFollowers(user_id, access_token) {
   return new Promise((resolve, reject) => {
-    /**
-     * recursive Fill the artists array and handle the pagination recursively
-     * @params index
-     * @params retry
-     */
-    let recursive = async function (index = 0, retry = retry_limit) {
-      // Configuration of the https request
-      const options = {
-        hostname: 'api.deezer.com',
-        path: '/user/'+user_id+'/followers?limit='+call_limit+'&index='+index+(access_token ? '&access_token='+access_token : ''),
-        method: 'GET',
-        headers: {
-          'content-type': 'text/json'
-        },
-      };
-
-      httpsCall(options)
-        .then(response => { // response is ok, push the result in array
-          Array.prototype.push.apply(followers, response.data)
-          if(response.next) { // if has a next object, keep going
-            recursive(index+call_limit)
-              .catch(() => resolve(followers)); // resolve the iterations if an error happens
-          } else { // no more page, resolve with the result
-            resolve(followers);
-          }
-        })
-        .catch(err => {
-          if (retry > 0 && err.code == 4) { // too many request and still have a retry, so wait for a delay and get back
-            setTimeout(recursive, retry_timeout, index, retry-1);
-          } else {
-            if(followers.length == 0) { // if there's no playlist retrieved, reject with the error
-              reject(err);              
-            } else { // otherwise, best-effort mode
-              resolve(followers);
-            }
-          }
-        });
-    };
-
-    recursive()
+    const path = '/user/' + user_id + '/followers?access_token=' + access_token + '&';
+    recursiveHttps(path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
   });
 }
 
-async function getMeAccount(access_token) {
-  var me;
-  var callError;
-  var retry = retry_limit;
-
-  // get the general data of the artist
-  do {
-    const options = {
-        hostname: 'api.deezer.com',
-        path: '/user/me?access_token=' + access_token,
-        method: 'GET',
-        headers: {
-          'content-type': 'text/json'
-        },
-      };
-
-    const call = await httpsCall(options) // await for the response
-      .catch(err => { // catch if error
-        callError = err;
-        retry--;
-      });
-
-    if(call) {
-      me = call;
-    } else {
-      await sleep(retry_timeout);
-    }
-  } while (!me && retry > 0); // loop while there is another page
-  
+function getMeAccount(access_token) {
   return new Promise((resolve, reject) => {
-    if (!me) {
-      reject(utils.error("No content"), 200);
-    } else {
-      resolve(formatUserToStandard(me))
-    }
-  })
+    const path = '/user/me?access_token=' + access_token;
+    genericHttps(path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
 }
 
 /**
  * getSocialFriends
  * @params id
  */
-async function getSocialFriends(user_id, access_token) {
+function getSocialFriends(user_id, access_token) {
   return new Promise((resolve, reject) => {
       // retrieve the general content
       const promise = fetchFollowers(user_id, access_token)
@@ -996,47 +599,15 @@ async function getSocialFriends(user_id, access_token) {
     });
 }
 
-async function fetchSearch(type, query, strict) {
-  var search;
-  var callError;
-  var retry = retry_limit;
-
-  // get the general data of the artist
-  do {
-    const options = {
-        hostname: 'api.deezer.com',
-        // artist?q=eminem
-        path: '/search/'+type+'?q='+encodeURI(query)+(strict == true ? '&sort=ranking&strict=on':''),
-        method: 'GET',
-        headers: {
-          'content-type': 'text/json'
-        },
-      };
-
-    const call = await httpsCall(options) // await for the response
-      .catch(err => { // catch if error
-        callError = err;
-        retry--;
-      });
-
-    if(call) {
-      search = call;
-    } else {
-      await sleep(retry_timeout);
-    }
-  } while (!search && retry > 0); // loop while there is another page
-  
+function fetchSearch(type, query, strict) {
   return new Promise((resolve, reject) => {
-    if (!search) {
-      if (callError) {
-        reject(callError);
-      } else {
-        reject(utils.error("No content", 200));
-      }
-    } else {
-      resolve(search)
-    }
-  })
+    const path = '/search/'+type+'?q='+encodeURI(query)+(strict == true ? '&sort=ranking&strict=on':'');
+    genericHttps(path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
 }
 
 async function getSearch(query, types = "*", strict = true) {
@@ -1374,7 +945,6 @@ exports.getArtists = getArtists;
 exports.getRelatedArtists = getRelatedArtists;
 exports.getArtist = getArtist;
 exports.fetchAlbums = fetchAlbums;
-exports.getPlaylists = getPlaylists;
 exports.getMyReleases = getMyReleases;
 exports.getReleases = getReleases;
 exports.getReleaseContent = getReleaseContent;
