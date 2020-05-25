@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-
 const users = require('../src/users');
 
 router.get('/me', (req, res, next) => {

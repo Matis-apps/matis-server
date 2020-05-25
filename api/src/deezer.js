@@ -492,7 +492,6 @@ async function getReleases(user_id, access_token) {
  */
 function getReleaseContent(obj, id) {
   return new Promise((resolve, reject) => {
-    console.log(obj, id)
     if(obj === 'album') {
       // retrieve the general content
       const promise = fetchAlbum(id)
@@ -759,7 +758,7 @@ function searchAlbumUPC(query, upc) {
 }
 
 
-function searchTrackISRS(query, isrc) {
+function searchTrackISRC(query, isrc) {
   return new Promise(async (resolve, reject) => {
 
     var track = null;
@@ -1052,4 +1051,4 @@ exports.getMeAccount = getMeAccount;
 exports.getSocialFriends = getSocialFriends;
 exports.getSearch = getSearch;
 exports.searchAlbumUPC = searchAlbumUPC;
-exports.searchTrackISRS = searchTrackISRS;
+exports.searchTrackISRC = searchTrackISRC;

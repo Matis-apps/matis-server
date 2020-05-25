@@ -263,7 +263,7 @@ async function getSearch(access_token, query, types = "*", strict = true) {
 }
 
 
-function searchAlbumUPC(access_token,query, upc) {
+function searchAlbumUPC(access_token, query, upc) {
   return new Promise(async (resolve, reject) => {
 
     var album = null;
@@ -309,7 +309,7 @@ function searchAlbumUPC(access_token,query, upc) {
   });
 }
 
-function searchTrackISRS(access_token, query, isrc) {
+function searchTrackISRC(access_token, query, isrc) {
   return new Promise(async (resolve, reject) => {
 
     var track = null;
@@ -518,4 +518,4 @@ function timestampToTime(seconds) {
 exports.getMeAccount = getMeAccount;
 exports.getSearch = getSearch;
 exports.searchAlbumUPC = searchAlbumUPC;
-exports.searchTrackISRS = searchTrackISRS;
+exports.searchTrackISRC = searchTrackISRC;

@@ -30,11 +30,13 @@ const authRoutes = require('./api/routes/auth')
 const usersRoutes = require('./api/routes/users')
 const deezerRoutes = require('./api/routes/deezer')
 const spotifyRoutes = require('./api/routes/spotify')
+const toolRoutes = require('./api/routes/tool')
 
 const passportMiddleware = passport.authenticate('jwt', {session: false});
 
 app.use('/auth', authRoutes);
 app.use('/users', passportMiddleware, usersRoutes);
+app.use('/tool', passportMiddleware, toolRoutes);
 app.use('/deezer', passportMiddleware, require('./api/middleware/isDeezer').isDeezer, deezerRoutes);
 app.use('/spotify', passportMiddleware, require('./api/middleware/isSpotify').isSpotify, spotifyRoutes);
 

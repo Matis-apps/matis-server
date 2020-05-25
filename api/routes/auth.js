@@ -1,7 +1,5 @@
-
 const express = require('express');
 const router = express.Router();
-
 const auth = require('../src/auth');
 
 router.post('/login', (req, res, next) => {
