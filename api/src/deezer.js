@@ -119,9 +119,7 @@ function recursiveHttps(path) {
             setTimeout(recursive, retry_timeout, index, retry-1);
           } else {
             if(result.length == 0) { // if there's no playlist retrieved, reject with the error
-              reject(utils.error(error.message, 500));              
-            } else { // otherwise, best-effort mode
-              resolve(result);
+              reject(utils.error(error.message, error.code || 500));              
             }
           }
         });
@@ -225,29 +223,31 @@ function getArtist(id) {
  * @params id
  */
 function getRelatedArtists(id) {
-  const path = '/artist/' + id + '/related';
-  genericHttps(path)
-    .then(result => {
-      return result
-    })
-    .then(async (relatedArtists) => {
-      await Promise
-        .all(relatedArtists.data.map(a => fetchArtist(a.id)))
-        .then(results => {
-          var artists = [];
-          results.forEach((a) => {
-            if (a.albums && a.albums.length > 0) {            
-              artists.push(formatArtistToFeed(a));
-            }
+  return new Promise((resolve, reject) => {
+    const path = '/artist/' + id + '/related';
+    genericHttps(path)
+      .then(result => {
+        return result
+      })
+      .then(async (relatedArtists) => {
+        await Promise
+          .all(relatedArtists.data.map(a => fetchArtist(a.id)))
+          .then(results => {
+            var artists = [];
+            results.forEach((a) => {
+              if (a.albums && a.albums.length > 0) {            
+                artists.push(formatArtistToFeed(a));
+              }
+            })
+            return artists;
           })
-          return relatedArtistsFormated;
-        })
-        .then(relatedArtistsFormated =>  {
-          resolve(relatedArtistsFormated);
-        })
-        .catch(error => reject(error));
-    })
-    .catch(error => reject(error));
+          .then(relatedArtistsFormated =>  {
+            resolve(relatedArtistsFormated);
+          })
+          .catch(error => reject(error));
+      })
+      .catch(error => reject(error));
+  });
 }
 
 /**
@@ -492,6 +492,7 @@ async function getReleases(user_id, access_token) {
  */
 function getReleaseContent(obj, id) {
   return new Promise((resolve, reject) => {
+    console.log(obj, id)
     if(obj === 'album') {
       // retrieve the general content
       const promise = fetchAlbum(id)
@@ -816,7 +817,7 @@ function formatArtistToStandard(artist) {
     id: artist.id,
     name: artist.name,
     picture: artist.picture ? artist.picture : null,
-    link: artist.link ? artist.link : "httpss://www.deezer.com/artist/"+artist.id,
+    link: artist.link ? artist.link : "https://www.deezer.com/artist/"+artist.id,
     albums: artist.albums ? artist.albums.data.map(a => formatAlbumToStandard(a)) : null,
     nb_albums: artist.nb_album ? artist.nb_album : null,
     nb_fans: artist.nb_fan ? artist.nb_fan : null,
@@ -940,7 +941,7 @@ function formatAlbumToFeed(album) {
       id: album.artist.id,
       name: album.artist.name,
       picture: album.artist.picture_small,
-      link: "httpss://www.deezer.com/profile/" + album.artist.id,
+      link: "https://www.deezer.com/profile/" + album.artist.id,
       added_at: album.time_add ? timestampToDate(album.time_add) : null,
     },
     // Related to the content
@@ -950,6 +951,7 @@ function formatAlbumToFeed(album) {
       type: album.record_type,
       picture: album.cover_medium,
       link: album.link,
+      upc: album.upc || null,
       genre: album.genre_id,
       updated_at: album.release_date,
       tracks: album.tracks ? album.tracks.data.map(t => formatTrackToStandard(t)) : null,
@@ -967,7 +969,7 @@ function formatPlaylistToFeed(playlist) {
       id: playlist.creator.id,
       name: playlist.creator.name,
       picture: null,
-      link: "httpss://www.deezer.com/profile/" + playlist.creator.id,
+      link: "https://www.deezer.com/profile/" + playlist.creator.id,
       added_at: playlist.time_add ? timestampToDate(playlist.time_add) : null, 
     },
     // Related to the content
@@ -978,7 +980,10 @@ function formatPlaylistToFeed(playlist) {
       picture: playlist.picture_medium,
       link: playlist.link,
       genre: null,
-      updated_at: playlist.time_mod ? timestampToDate(playlist.time_mod) : timestampToDate(playlist.time_add), 
+      updated_at: playlist.time_mod ? timestampToDate(playlist.time_mod)
+                : playlist.time_add ? timestampToDate(playlist.time_add) 
+                : playlist.tracks ? timestampToDate(Math.max.apply(null, playlist.tracks.data.map(t => t.time_add)))
+                : null, 
       tracks: playlist.tracks ? playlist.tracks.data.map(t => formatTrackToStandard(t)) : null,
       last: playlist,
     },
