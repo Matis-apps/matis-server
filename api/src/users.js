@@ -11,6 +11,7 @@ function me(req) {
       'name': req.user.name,
       'email': req.user.email,
       'deezer': req.user.deezer,
+      'spotify': req.user.spotify,
     })
   })
 }

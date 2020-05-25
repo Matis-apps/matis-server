@@ -87,6 +87,9 @@ function saveSpotify(_id, json) {
       "spotify.token.expires_in": json.expires_in,
       "spotify.token.scope": json.scope,
     };
+    if (json.refresh_token) {
+      update["spotify.token.refresh_token"] = json.refresh_token;
+    }
     const options = { new: true, upsert: true, useFindAndModify: false };
     await User.findOneAndUpdate(query, update, options)
       .then((user) => {

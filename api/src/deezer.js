@@ -23,7 +23,6 @@ function httpsCall(options) {
         if (response.statusCode === 200) {
           try {
             let json = JSON.parse(responseBody)
-
             if (!json) { // json is undefined or null
               reject(utils.error("Unvalid json", 500));
             } else if (json.error) { // json has an error (set by Deezer)
@@ -31,16 +30,15 @@ function httpsCall(options) {
             } else { // otherwise, json is ok
               resolve(json)
             }
-          } catch(e) {
-            reject(utils.error(e.message, 500));
+          } catch(err) {
+            reject(utils.error(err.message, 500));
           }
         } else {
           reject(utils.error(response, response.statusCode));
         }
       })
-    }).on('error', function(e) {
-      reject(utils.error(e.message, 500));
-    });
+    })
+    .on('error', (err) => reject(utils.error(err.message, 500)));
   })
 }
 
@@ -61,24 +59,19 @@ function genericHttps(path) {
           },
         };
 
-      const call = await httpsCall(options) // await for the response
-        .catch(err => { // catch if error
-          callError = err;
-          retry--;
-          if(callError.code == 4) reject(callError)
-        });
-
-      if(call) {
-        result = call; // push the data in the response
-      } else {
-        await sleep(retry_timeout);
+      try {
+        result = await httpsCall(options); // await for the response
+      } catch(err) {
+        error = err;
+        if(error.code == 4) retry-- && await sleep(retry_timeout);// code 4 == quota limit
+        else retry = 0;
       }
     } while (!result && retry > 0); // loop while there is another page
 
     if (result) {
       resolve(result);
-    } else if (callError) {
-      reject(callError);
+    } else if (error) {
+      reject(error);
     } else {
       reject(utils.error("Something went wrong..."));
     }
@@ -104,25 +97,22 @@ function recursiveHttps(path) {
         },
       };
 
-      httpsCall(options)
-        .then(response => { // response is ok, push the result in array
-          Array.prototype.push.apply(result, response.data)
-          if(response.next) { // if has a next object, keep going
-            recursive(index+call_limit)
-              .catch(() => resolve(result)); // resolve the iterations if an error happens
-          } else { // no more page, resolve with the result
-            resolve(result);
-          }
-        })
-        .catch(error => {
-          if (retry > 0 && error.code == 4) { // too many request and still have a retry, so wait for a delay and get back
-            setTimeout(recursive, retry_timeout, index, retry-1);
-          } else {
-            if(result.length == 0) { // if there's no playlist retrieved, reject with the error
-              reject(utils.error(error.message, error.code || 500));              
-            }
-          }
-        });
+      try {
+        let response = await httpsCall(options);
+        Array.prototype.push.apply(result, response.data)
+        if(response.next) { // if has a next object, keep going
+          recursive(index+call_limit)
+            .catch(() => resolve(result)); // resolve the iterations if an error happens
+        } else { // no more page, resolve with the result
+          resolve(result);
+        }
+      } catch(error) {
+        if (retry > 0 && error.code == 4) { // too many request and still have a retry, so wait for a delay and get back
+          setTimeout(recursive, retry_timeout, index, retry-1);
+        } else {
+          reject(utils.error(error.message || 'Something went wrong...', error.code || 500));
+        }
+      }
     };
 
     recursive()
@@ -156,7 +146,7 @@ function getArtists(user_id = 'me', access_token) {
   return new Promise((resolve, reject) => {
     fetchArtists(user_id, access_token)
       .then(result => {
-        resolve(result.map(a => formatArtistToStandard(a)))
+        resolve(result.map(i => formatArtistToStandard(i)))
       })
       .catch(err => reject(err));
   });
@@ -231,7 +221,7 @@ function getRelatedArtists(id) {
       })
       .then(async (relatedArtists) => {
         await Promise
-          .all(relatedArtists.data.map(a => fetchArtist(a.id)))
+          .all(relatedArtists.data.map(i => fetchArtist(i.id)))
           .then(results => {
             var artists = [];
             results.forEach((a) => {
@@ -275,7 +265,7 @@ function getAlbums(user_id = 'me', access_token) {
   return new Promise((resolve, reject) => {
     fetchAlbums(user_id, access_token)
       .then(result => {
-        resolve(result.map(a => formatAlbumToFeed(a)))
+        resolve(result.map(i => formatAlbumToFeed(i)))
       })
       .catch(err => reject(err));
   });
@@ -350,13 +340,13 @@ function fetchTrack(id) {
 async function getMyReleases(access_token) {
   const user_id = 'me';
   var releases = [];
-  var callError;
+  var error;
 
-  const artists = await fetchArtists(user_id, access_token).catch(err => callError = err);
+  const artists = await fetchArtists(user_id, access_token).catch(err => error = err);
   if(artists && artists.length > 0) {
     await Promise
-      .all(artists.map(a => 
-        fetchArtist(a.id).catch(err => callError = err))
+      .all(artists.map(i => 
+        fetchArtist(i.id).catch(err => error = err))
       )
       .then(results => {
         results.forEach((a) => {
@@ -364,13 +354,13 @@ async function getMyReleases(access_token) {
             releases.push(formatArtistToFeed(a));
           }
         })
-      }).catch(err => callError = err);
+      }).catch(err => error = err);
   }
   var genres = [];
   genres.push({key: -42, value: "Tous"})
   if(artists && artists.length > 0) {
-    var availableGenres = [...new Set(releases.map(item => item.content.genre))];
-    const call = await getGenres().catch(err => callError = err);
+    var availableGenres = [...new Set(releases.map(i => i.content.genre))];
+    const call = await getGenres().catch(err => error = err);
     if(call && call.length > 0) {
       availableGenres.forEach(item => {
 
@@ -385,7 +375,7 @@ async function getMyReleases(access_token) {
   }
   releases.genres = genres;
 
-  const playlists = await fetchPlaylists(user_id, access_token).catch(err => callError = err);
+  const playlists = await fetchPlaylists(user_id, access_token).catch(err => error = err);
   if(playlists && playlists.length > 0) {
     playlists.forEach(p => {
       if(!p.is_loved_track && p.creator.id != user_id) {
@@ -396,8 +386,8 @@ async function getMyReleases(access_token) {
 
   return new Promise((resolve, reject) => {
     if (releases.length == 0) {
-      if (callError) {
-        reject(callError);
+      if (error) {
+        reject(error);
       } else {
         reject(utils.error("No content"), 200);
       }
@@ -415,13 +405,13 @@ async function getMyReleases(access_token) {
  */
 async function getReleases(user_id, access_token) {
   var releases = [];
-  var callError;
+  var error;
 
-  const artists = await fetchArtists(user_id, access_token).catch(err => callError = err);
+  const artists = await fetchArtists(user_id, access_token).catch(err => error = err);
   if(artists && artists.length > 0) {
     await Promise
-      .all(artists.map(a => 
-        fetchArtist(a.id).catch(err => callError = err))
+      .all(artists.map(i => 
+        fetchArtist(i.id).catch(err => error = err))
       )
       .then(results => {
         results.forEach((a) => {
@@ -429,14 +419,14 @@ async function getReleases(user_id, access_token) {
             releases.push(formatArtistToFeed(a));
           }
         })
-      }).catch(err => callError = err);
+      }).catch(err => error = err);
   }
 
   var genres = [];
   genres.push({key: -42, value: "Tous"})
   if(artists && artists.length > 0) {
-    var availableGenres = [...new Set(releases.map(item => item.content.genre))];
-    const call = await getGenres().catch(err => callError = err);
+    var availableGenres = [...new Set(releases.map(i => i.content.genre))];
+    const call = await getGenres().catch(err => error = err);
     if(call && call.length > 0) {
       availableGenres.forEach(item => {
 
@@ -451,14 +441,14 @@ async function getReleases(user_id, access_token) {
   }
   releases.genres = genres;
 
-  const playlists = await fetchPlaylists(user_id, access_token).catch(err => callError = err);
+  const playlists = await fetchPlaylists(user_id, access_token).catch(err => error = err);
   if(playlists && playlists.length > 0) {
     playlists.forEach(p => {
       releases.push(formatPlaylistToFeed(p));
     });
   }
 
-  const albums = await fetchAlbums(user_id, access_token).catch(err => callError = err);
+  const albums = await fetchAlbums(user_id, access_token).catch(err => error = err);
   if(albums && albums.length > 0) {
     albums.forEach(a => {
       let existingAlbum = releases.find(r => {
@@ -473,8 +463,8 @@ async function getReleases(user_id, access_token) {
 
   return new Promise((resolve, reject) => {
     if (releases.length == 0) {
-      if (callError) {
-        reject(callError);
+      if (error) {
+        reject(error);
       } else {
         reject(utils.error("No content"), 200);
       }
@@ -505,7 +495,7 @@ function getReleaseContent(obj, id) {
           release.related = response;
           release.related.sort((a,b) => sortLastReleases(a,b));
           resolve(release);
-        })
+        }).catch(err => reject(err));
       }).catch(err => reject(err));
     } else if (obj === 'playlist') {
       getPlaylistContent(id)
@@ -519,7 +509,7 @@ function getReleaseContent(obj, id) {
 }
 
 /**
- * getRelatedArtists
+ * getGenres
  * @params id
  */
 function getGenres() {
@@ -586,13 +576,13 @@ function getSocialFriends(user_id, access_token) {
       const promise = fetchFollowers(user_id, access_token)
         .then((response) => {
           let social = new Object();
-          social.followers = response.map(a => formatUserToStandard(a)).sort((a,b) => sortFriends(a,b));
+          social.followers = response.map(i => formatUserToStandard(i)).sort((a,b) => sortFriends(a,b));
           return social;
         }).catch(err => reject(err));
 
       promise.then((social) => {
         fetchFollowings(user_id, access_token).then((response) => {
-          social.followings = response.map(a => formatUserToStandard(a)).sort((a,b) => sortFriends(a,b));
+          social.followings = response.map(i => formatUserToStandard(i)).sort((a,b) => sortFriends(a,b));
           resolve(social);
         })
       }).catch(err => reject(err));
@@ -602,7 +592,7 @@ function getSocialFriends(user_id, access_token) {
 
 function fetchSearch(type, query, strict) {
   return new Promise((resolve, reject) => {
-    const path = '/search/'+type+'?q='+encodeURI(query)+(strict == true ? '&sort=ranking&strict=on':'');
+    const path = '/search/'+type+'?q='+encodeURI(query)+(strict == false ? '&sort=ranking&strict=on':'');
     genericHttps(path)
       .then(result => {
         resolve(result);
@@ -615,7 +605,7 @@ async function getSearch(query, types = "*", strict = true) {
   const allowedTypes = ['artist', 'album', 'playlist', 'track', 'user'];
   var search_types = [];
   var results = new Object, countResults = 0;
-  var callError;
+  var error;
 
   if (types == "*") {
     search_types = allowedTypes;
@@ -666,21 +656,21 @@ async function getSearch(query, types = "*", strict = true) {
           case 'album':
             if (results.album) {
               await Promise
-                .all(results.album.map(a => fetchAlbum(a.id).catch(err => callError = err)))
+                .all(results.album.map(i => fetchAlbum(i.id).catch(err => error = err)))
                 .then(albums => {
                   results.album = albums.map(i => formatAlbumToStandard(i))
                   countResults += results.album.length;
-                }).catch(err => callError = err);
+                }).catch(err => error = err);
             }
             break;
           case 'track':
             if (results.track) {
               await Promise
-                .all(results.track.map(t => fetchTrack(t.id).catch(err => callError = err)))
+                .all(results.track.map(i => fetchTrack(i.id).catch(err => error = err)))
                 .then(tracks => {
                   results.track = tracks.map(i => formatTrackToStandard(i))
                   countResults += results.track.length;
-                }).catch(err => callError = err);
+                }).catch(err => error = err);
             }
             break;
           case 'user':
@@ -694,13 +684,13 @@ async function getSearch(query, types = "*", strict = true) {
       results.total = countResults;
     }
   } else {
-    callError = utils.error("Bad t paramater", 400)
+    error = utils.error("Bad t paramater", 400)
   }
 
   return new Promise((resolve, reject) => {
     if (countResults == 0) {
-      if (callError) {
-        reject(callError)
+      if (error) {
+        reject(error)
       } else {
         reject(utils.error("No content", 200))
       }
@@ -712,40 +702,41 @@ async function getSearch(query, types = "*", strict = true) {
 
 function searchAlbumUPC(query, upc) {
   return new Promise(async (resolve, reject) => {
-
     var album = null;
     var error = null;
     var index = 0;
-    var total = call_limit;
-    var retry = retry_limit;
     var limit = call_limit/2; // improve the performances due to fullAlbums.filter
-    
-    do {
-      const path = '/search/album?limit=' + limit + '&index=' + index + '&q='+encodeURI(query);
-      let albums = await genericHttps(path)
-        .catch(err => error = err);
+    var total = limit;
 
-      if(albums && albums.data) {
-        total = albums.total;
-        let fullAlbums = await Promise
-          .all(albums.data.map(a => fetchAlbum(a.id)))
-          .then(albums => {
-            retry = retry_limit;
-            return albums;
-          })
-          .catch(err => error = err);
-        if (fullAlbums && fullAlbums.length > 0) {
-          error = null;
-          index+=limit;
-          album = fullAlbums.filter(a => a.upc == upc);
-          album = album[0] ? formatAlbumToStandard(album[0]) : null;
+    var albums, fullAlbums;
+    do {
+      albums = fullAlbums = null;
+      const path = '/search/album?limit=' + limit + '&index=' + index + '&q='+encodeURI(query);
+
+      try {
+        albums = await genericHttps(path);
+        if(albums && albums.data) {
+          total = albums.total;
+          try {
+            fullAlbums = await Promise.all(albums.data.map(i => fetchAlbum(i.id)));
+            //fullAlbums = await Promise.all(albums.data.filter(i => utils.checkSize(query, i.title)).map(i => fetchAlbum(i.id)));
+          } finally {
+            if (fullAlbums && fullAlbums.length > 0) {
+              album = fullAlbums.filter(a => a.upc == upc);
+              album = album[0] ? formatAlbumToStandard(album[0]) : null; 
+            } else {
+              throw utils.error("Invalid data", 500)
+            }
+          }
+        } else {
+          throw utils.error("Invalid data", 500)
         }
+      } catch(err) {
+        error = err;
+      } finally {
+        index+=limit;
       }
-      if(error) {
-        retry--;
-        await sleep(retry_timeout); 
-      }
-    } while (!album && retry > 0 && total > index)
+    } while (!album && total > index)
 
     if (album) {
       resolve(album)
@@ -764,36 +755,37 @@ function searchTrackISRC(query, isrc) {
     var track = null;
     var error = null;
     var index = 0;
-    var total = call_limit;
-    var retry = retry_limit;
     var limit = call_limit/2; // improve the performances due to fullAlbums.filter
+    var total = limit;
 
+    var tracks, fullTracks;
     do {
+      tracks = fullTracks = null;
       const path = '/search/track?limit=' + limit + '&index=' + index + '&q='+encodeURI(query);
-      let tracks = await genericHttps(path)
-        .catch(err => error = err);
 
-      if(tracks && tracks.data) {
-        total = tracks.total;
-        let fullTracks = await Promise
-          .all(tracks.data.map(t => fetchTrack(t.id)))
-          .then(tracks => { 
-            retry = retry_limit;
-            return tracks 
-          })
-          .catch(err => error = err);
-        if (fullTracks && fullTracks.length > 0) {
-          error = null;
-          index+=limit;
-          track = fullTracks.filter(t => t.isrc == isrc);
-          track = track[0] ? formatTrackToStandard(track[0]) : null;
+      try {
+        tracks = await genericHttps(path);
+        if(tracks && tracks.data) {
+          total = tracks.total;
+          try {
+            fullTracks = await Promise.all(tracks.data.map(i => fetchTrack(i.id)))
+          } finally {
+            if (fullTracks && fullTracks.length > 0) {
+              track = fullTracks.filter(t => t.isrc == isrc);
+              track = track[0] ? formatTrackToStandard(track[0]) : null; 
+            } else {
+              throw utils.error("Invalid data", 500)
+            }
+          }
+        } else {
+          throw utils.error("Invalid data", 500)
         }
+      } catch(err) {
+        error = err;
+      } finally {
+        index+=limit;
       }
-      if(error) {
-        retry--;
-        await sleep(retry_timeout); 
-      }
-    } while (!track && retry > 0 && total > index)
+    } while (!track && total > index)
 
     if (track) {
       resolve(track)
@@ -817,7 +809,7 @@ function formatArtistToStandard(artist) {
     name: artist.name,
     picture: artist.picture ? artist.picture : null,
     link: artist.link ? artist.link : "https://www.deezer.com/artist/"+artist.id,
-    albums: artist.albums ? artist.albums.data.map(a => formatAlbumToStandard(a)) : null,
+    albums: artist.albums ? artist.albums.data.map(i => formatAlbumToStandard(i)) : null,
     nb_albums: artist.nb_album ? artist.nb_album : null,
     nb_fans: artist.nb_fan ? artist.nb_fan : null,
     added_at: artist.time_add ? timestampToDate(artist.time_add) : null,
@@ -829,7 +821,7 @@ function formatAlbumToStandard(album){
   if (album.artist) {
     artists.push(formatArtistToStandard(album.artist));
     if (album.contributors) {
-      var contributors = album.contributors ? album.contributors.map(a => formatArtistToStandard(a)) : [];
+      var contributors = album.contributors ? album.contributors.map(i => formatArtistToStandard(i)) : [];
       artists = [... contributors];
     }
   }
@@ -870,7 +862,7 @@ function formatTrackToStandard(track){
   if (track.artist) {
     artists.push(formatArtistToStandard(track.artist));
     if (track.contributors) {
-      var contributors = track.contributors ? track.contributors.map(a => formatArtistToStandard(a)) : [];
+      var contributors = track.contributors ? track.contributors.map(i => formatArtistToStandard(i)) : [];
       artists = [... contributors];
     }
   }
@@ -924,6 +916,7 @@ function formatArtistToFeed(artist){
       type: artist.albums[0].record_type,
       picture: artist.albums[0].cover_medium,
       link: artist.albums[0].link,
+      upc: artist.albums[0].upc || null,
       genre: artist.albums[0].genre_id,
       updated_at: artist.albums[0].release_date,
       last: artist.albums[0],
@@ -953,7 +946,7 @@ function formatAlbumToFeed(album) {
       upc: album.upc || null,
       genre: album.genre_id,
       updated_at: album.release_date,
-      tracks: album.tracks ? album.tracks.data.map(t => formatTrackToStandard(t)) : null,
+      tracks: album.tracks ? album.tracks.data.map(i => formatTrackToStandard(i)) : null,
       last: album,
     },
   };
@@ -981,9 +974,9 @@ function formatPlaylistToFeed(playlist) {
       genre: null,
       updated_at: playlist.time_mod ? timestampToDate(playlist.time_mod)
                 : playlist.time_add ? timestampToDate(playlist.time_add) 
-                : playlist.tracks ? timestampToDate(Math.max.apply(null, playlist.tracks.data.map(t => t.time_add)))
+                : playlist.tracks ? timestampToDate(Math.max.apply(null, playlist.tracks.data.map(i => i.time_add)))
                 : null, 
-      tracks: playlist.tracks ? playlist.tracks.data.map(t => formatTrackToStandard(t)) : null,
+      tracks: playlist.tracks ? playlist.tracks.data.map(i => formatTrackToStandard(i)) : null,
       last: playlist,
     },
   };

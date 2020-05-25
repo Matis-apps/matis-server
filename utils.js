@@ -108,9 +108,19 @@ function issueJWT(user) {
   }
 }
 
+
+function checkSize(one, two, accepted_diff = 200) {
+  if (typeof one !== 'string') return 0;
+  if (typeof two !== 'string') return 0;
+
+  var diff = Math.abs(two.length - one.length) / one.length * 100;
+  return diff < accepted_diff;
+}
+
 exports.error = error;
 exports.asyncForEach = asyncForEach;
 exports.capitalize = capitalize;
 exports.validPassword = validPassword;
 exports.genPassword = genPassword;
 exports.issueJWT = issueJWT;
+exports.checkSize = checkSize;
