@@ -81,4 +81,38 @@ router.get('/search', (req, res, next) => {
   }
 });
 
+router.get('/search/upc', (req, res, next) => {
+  if (!req.query.q) {
+    next(utils.error("Missing q parameter", 400));
+  } else if (!req.query.upc) {
+    next(utils.error("Missing upc parameter", 400));
+  } else {
+    const query = req.query.q;
+    const upc = req.query.upc;
+
+    spotify.searchAlbumUPC(req.spotify_token, query, upc).then(data => {
+      res.status(200).json({
+        'data': data,
+      })
+    }).catch(err => next(err));
+  }
+});
+
+router.get('/search/isrc', (req, res, next) => {
+  if (!req.query.q) {
+    next(utils.error("Missing q parameter", 400));
+  } else if (!req.query.isrc) {
+    next(utils.error("Missing isrc parameter", 400));
+  } else {
+    const query = req.query.q;
+    const isrc = req.query.isrc;
+
+    spotify.searchTrackISRS(req.spotify_token, query, isrc).then(data => {
+      res.status(200).json({
+        'data': data,
+      })
+    }).catch(err => next(err));
+  }
+});
+
 module.exports = router;

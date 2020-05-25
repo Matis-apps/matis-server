@@ -65,6 +65,7 @@ function genericHttps(path) {
         .catch(err => { // catch if error
           callError = err;
           retry--;
+          if(callError.code == 4) reject(callError)
         });
 
       if(call) {
@@ -721,25 +722,28 @@ function searchAlbumUPC(query, upc) {
     
     do {
       const path = '/search/album?limit=' + limit + '&index=' + index + '&q='+encodeURI(query);
-      let albums = await genericHttps(path).catch(err => error = err);
+      let albums = await genericHttps(path)
+        .catch(err => error = err);
 
       if(albums && albums.data) {
         total = albums.total;
         let fullAlbums = await Promise
           .all(albums.data.map(a => fetchAlbum(a.id)))
-          .then(albums => { return albums })
-          .catch(err => {
-            retry--;
-            error = err;
-          });
-        if (fullAlbums) {
+          .then(albums => {
+            retry = retry_limit;
+            return albums;
+          })
+          .catch(err => error = err);
+        if (fullAlbums && fullAlbums.length > 0) {
           error = null;
           index+=limit;
           album = fullAlbums.filter(a => a.upc == upc);
           album = album[0] ? formatAlbumToStandard(album[0]) : null;
-        } else if(error) {
-          await sleep(retry_timeout); 
         }
+      }
+      if(error) {
+        retry--;
+        await sleep(retry_timeout); 
       }
     } while (!album && retry > 0 && total > index)
 
@@ -766,25 +770,28 @@ function searchTrackISRS(query, isrc) {
 
     do {
       const path = '/search/track?limit=' + limit + '&index=' + index + '&q='+encodeURI(query);
-      let tracks = await genericHttps(path).catch(err => error = err);
+      let tracks = await genericHttps(path)
+        .catch(err => error = err);
 
       if(tracks && tracks.data) {
         total = tracks.total;
         let fullTracks = await Promise
           .all(tracks.data.map(t => fetchTrack(t.id)))
-          .then(tracks => { return tracks })
-          .catch(err => {
-            retry--;
-            error = err;
-          });
-        if (fullTracks) {      
+          .then(tracks => { 
+            retry = retry_limit;
+            return tracks 
+          })
+          .catch(err => error = err);
+        if (fullTracks && fullTracks.length > 0) {
           error = null;
           index+=limit;
           track = fullTracks.filter(t => t.isrc == isrc);
           track = track[0] ? formatTrackToStandard(track[0]) : null;
-        } else if(error) {
-          await sleep(retry_timeout); 
         }
+      }
+      if(error) {
+        retry--;
+        await sleep(retry_timeout); 
       }
     } while (!track && retry > 0 && total > index)
 

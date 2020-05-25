@@ -47,7 +47,7 @@ const httpsCall = async function(options) {
   })
 }
 
-function genericHttps(path, access_token) {
+function genericHttps(access_token, path) {
   return new Promise(async (resolve, reject) => {
     var result = null;
     var error = null;
@@ -69,6 +69,7 @@ function genericHttps(path, access_token) {
         .catch(err => { // catch if error
           callError = err;
           retry--;
+          if(callError.code == 401) reject(callError)
         });
 
       if(call) {
@@ -88,7 +89,7 @@ function genericHttps(path, access_token) {
   })
 }
 
-function recursiveHttps(path, access_token) {
+function recursiveHttps(access_token, path) {
   return new Promise((resolve, reject) => {
     var result = [];
     /**
@@ -119,7 +120,7 @@ function recursiveHttps(path, access_token) {
           }
         })
         .catch(error => {
-          if (retry > 0 && error.code == 4) { // too many request and still have a retry, so wait for a delay and get back
+          if (retry > 0 && error.code == 401) { // too many request and still have a retry, so wait for a delay and get back
             setTimeout(recursive, retry_timeout, index, retry-1);
           } else {
             if(result.length == 0) { // if there's no playlist retrieved, reject with the error
@@ -139,7 +140,7 @@ function recursiveHttps(path, access_token) {
 async function getMeAccount(access_token) {
   return new Promise((resolve, reject) => {
     const path = '/v1/me/';
-    genericHttps(path, access_token)
+    genericHttps(access_token, path)
       .then(result => {
         resolve(result)
       })
@@ -152,7 +153,7 @@ async function getMeAccount(access_token) {
 async function fetchSearch(access_token, type, query, strict) {
   return new Promise((resolve, reject) => {
     const path = '/v1/search?type='+type+'&q='+encodeURI(query);
-    genericHttps(path, access_token)
+    genericHttps(access_token, path)
       .then(result => {
         resolve(result)
       })
@@ -219,7 +220,7 @@ async function getSearch(access_token, query, types = "*", strict = true) {
           case 'album':
             if (results.album) {
               await Promise
-                .all(results.album.map(a => fetchAlbum(a.id, access_token).catch(err => callError = err)))
+                .all(results.album.map(a => fetchAlbum(access_token, a.id).catch(err => callError = err)))
                 .then(albums => {
                   results.album = albums.map(i => formatAlbumToStandard(i))
                   countResults += results.album.length;
@@ -233,7 +234,7 @@ async function getSearch(access_token, query, types = "*", strict = true) {
           case 'track':
             if (results.track) {
               await Promise
-                .all(results.track.map(t => fetchTrack(t.id, access_token).catch(err => callError = err)))
+                .all(results.track.map(t => fetchTrack(access_token, t.id).catch(err => callError = err)))
                 .then(tracks => {
                   results.track = tracks.map(i => formatTrackToStandard(i))
                   countResults += results.track.length;
@@ -261,14 +262,108 @@ async function getSearch(access_token, query, types = "*", strict = true) {
   })
 }
 
+
+function searchAlbumUPC(access_token,query, upc) {
+  return new Promise(async (resolve, reject) => {
+
+    var album = null;
+    var error = null;
+    var index = 0;
+    var total = call_limit;
+    var retry = retry_limit;
+    var limit = call_limit/2; // improve the performances due to fullAlbums.filter
+    
+    do {
+      const path = '/v1/search?type=album&limit=' + limit + '&offset=' + index + '&q=' + encodeURI(query);      
+      let albums = await genericHttps(access_token, path).catch(err => error = err);
+
+      if(albums && albums.albums && albums.albums.items) {
+        total = albums.total;
+        let fullAlbums = await Promise
+          .all(albums.albums.items.map(t => fetchAlbum(access_token, t.id)))
+          .then(tracks => {
+            retry = retry_limit;
+            return tracks 
+          })
+          .catch(err => error = err);
+        if (fullAlbums && fullAlbums.length > 0) {
+          error = null;
+          index+=limit;
+          album = fullAlbums.filter(a => a.external_ids.upc == upc);
+          album = album[0] ? formatAlbumToStandard(album[0]) : null;
+        }
+      }
+      if (error) {
+        if (error.code == 401) retry = 0 && reject(error);
+        else retry-- && await sleep(retry_timeout); 
+      }
+    } while (!album && retry > 0 && total > index)
+
+    if (album) {
+      resolve(album)
+    } else if (error) {
+      reject(error)
+    } else {
+      reject(utils.error("Not found", 200))
+    }
+  });
+}
+
+function searchTrackISRS(access_token, query, isrc) {
+  return new Promise(async (resolve, reject) => {
+
+    var track = null;
+    var error = null;
+    var index = 0;
+    var total = call_limit;
+    var retry = retry_limit;
+    var limit = call_limit/2; // improve the performances due to fullAlbums.filter
+
+    do {
+      const path = '/v1/search?type=track&limit=' + limit + '&offset=' + index + '&q=' + encodeURI(query);
+      let tracks = await genericHttps(access_token, path).catch(err => error = err);
+
+      if(tracks && tracks.tracks && tracks.tracks.items) {
+        total = tracks.total;
+        let fullTracks = await Promise
+          .all(tracks.tracks.items.map(t => fetchTrack(access_token, t.id)))
+          .then(tracks => { 
+            retry = retry_limit;
+            return tracks 
+          })
+          .catch(err => error = err);
+        if (fullTracks && fullTracks.length > 0) {      
+          error = null;
+          index+=limit;
+          track = fullTracks.filter(t => t.external_ids.isrc == isrc);
+          track = track[0] ? formatTrackToStandard(track[0]) : null;
+        }
+      }
+      if(error) {
+        if (error.code == 401) retry = 0 && reject(error);
+        else retry-- && await sleep(retry_timeout); 
+      }
+    } while (!track && retry > 0 && total > index)
+
+    if (track) {
+      resolve(track)
+    } else if (error) {
+      reject(error)
+    } else {
+      reject(utils.error("Not found", 200))
+    }
+  });
+}
+
+
 /**
  * fetchAlbum
  * @params id
  */
-function fetchAlbum(id, access_token) {
+function fetchAlbum(access_token, id) {
   return new Promise((resolve, reject) => {
     const path = '/v1/albums/'+id;
-    genericHttps(path, access_token)
+    genericHttps(access_token, path)
       .then(result => {
         resolve(result);
       })
@@ -280,10 +375,10 @@ function fetchAlbum(id, access_token) {
  * fetchTrack
  * @params id
  */
-function fetchTrack(id, access_token) {
+function fetchTrack(access_token, id) {
   return new Promise((resolve, reject) => {
     const path = '/v1/tracks/'+id;
-    genericHttps(path, access_token)
+    genericHttps(access_token, path)
       .then(result => {
         resolve(result);
       })
@@ -320,8 +415,8 @@ function formatAlbumToStandard(album){
     type: album.album_type,
     picture: album.images && album.images.length > 0 ? album.images[0].url : null,
     link: album.external_urls.spotify ? album.external_urls.spotify : "https://open.spotify.com/album/"+album.id,
-    upc: album.upc || null,
-    artists: artists.push(album.artists.map(i => formatArtistToStandard(i))),
+    upc: album.external_ids.upc || null,
+    artists: album.artists.map(i => formatArtistToStandard(i)),
     updated_at: album.release_date,
     added_at: /*album.time_add ? timestampToDate(album.time_add) :*/ null,
   };
@@ -422,3 +517,5 @@ function timestampToTime(seconds) {
 
 exports.getMeAccount = getMeAccount;
 exports.getSearch = getSearch;
+exports.searchAlbumUPC = searchAlbumUPC;
+exports.searchTrackISRS = searchTrackISRS;
