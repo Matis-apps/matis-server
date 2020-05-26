@@ -26,7 +26,14 @@ function httpsCall(options) {
             if (!json) { // json is undefined or null
               reject(utils.error("Unvalid json", 500));
             } else if (json.error) { // json has an error (set by Deezer)
-              reject(utils.error(json.error.message, json.error.code));
+              let code = json.error.code == 4 ? 429
+                       : json.error.code == 200 ? 403
+                       : json.error.code == 300 ? 401
+                       : json.error.code == 500 || json.error.code == 501 || json.error.code == 600 ? 400
+                       : json.error.code == 700 ? 503
+                       : json.error.code == 800 ? 404
+                       : json.error.code;
+              reject(utils.error(json.error.message, code));
             } else { // otherwise, json is ok
               resolve(json)
             }
@@ -63,7 +70,7 @@ function genericHttps(path) {
         result = await httpsCall(options); // await for the response
       } catch(err) {
         error = err;
-        if(error.code == 4) retry-- && await sleep(retry_timeout);// code 4 == quota limit
+        if(error.code == 429) retry-- && await sleep(retry_timeout);// code 429 == quota limit
         else retry = 0;
       }
     } while (!result && retry > 0); // loop while there is another page
@@ -107,7 +114,7 @@ function recursiveHttps(path) {
           resolve(result);
         }
       } catch(error) {
-        if (retry > 0 && error.code == 4) { // too many request and still have a retry, so wait for a delay and get back
+        if (retry > 0 && error.code == 429) { // too many request and still have a retry, so wait for a delay and get back
           setTimeout(recursive, retry_timeout, index, retry-1);
         } else {
           reject(utils.error(error.message || 'Something went wrong...', error.code || 500));
@@ -591,7 +598,6 @@ function getSocialFriends(user_id, access_token) {
           resolve(social);
         })
       }).catch(err => reject(err));
-
     });
 }
 
