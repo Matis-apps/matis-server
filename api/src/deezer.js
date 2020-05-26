@@ -615,7 +615,7 @@ function fetchSearch(type, query, strict) {
 async function getSearch(query, types = "*", strict = true) {
   const allowedTypes = ['artist', 'album', 'playlist', 'track', 'user'];
   var search_types = [];
-  var results = new Object, countResults = 0;
+  var results = [];
   var error;
 
   if (types == "*") {
@@ -634,72 +634,56 @@ async function getSearch(query, types = "*", strict = true) {
         .then((result) => {
           switch(type) {
             case 'artist':
-              results.artist = result.data.map(i => formatArtistToStandard(i));
+              Array.prototype.push.apply(results, result.data.map(i => formatArtistToStandard(i)));
+              //results.artist = result.data.map(i => formatArtistToStandard(i));
               break;
             case 'album':
-              results.album = result.data.map(i => formatAlbumToStandard(i));
+              Array.prototype.push.apply(results, result.data.map(i => formatAlbumToStandard(i)));
+              //results.album = result.data.map(i => formatAlbumToStandard(i));
               break;
             case 'playlist':
-              results.playlist = result.data.map(i => formatPlaylistToStandard(i));
+              Array.prototype.push.apply(results, result.data.map(i => formatPlaylistToStandard(i)));
+              //results.playlist = result.data.map(i => formatPlaylistToStandard(i));
               break;
             case 'track':
-              results.track = result.data.map(i => formatTrackToStandard(i));
+              Array.prototype.push.apply(results, result.data.map(i => formatTrackToStandard(i)));
+              //results.track = result.data.map(i => formatTrackToStandard(i));
               break;
             case 'user':
-              results.user = result.data.map(i => formatUserToStandard(i));
+              Array.prototype.push.apply(results, result.data.map(i => formatUserToStandard(i)));
+              //results.user = result.data.map(i => formatUserToStandard(i));
               break;
           }
-          countResults += result.data.length || 0;
         })
     })
-    results.total = countResults;
 
     if (strict) {
-      countResults = 0;
+      results = results.filter(item => item.name.toUpperCase().includes(query.toUpperCase()));
       await utils.asyncForEach(search_types, async (type) => {
         switch(type) {
-          case 'artist':
-            if (results.artist) {
-              results.artist = results.artist.filter(item => item.name.toUpperCase() == query.toUpperCase())
-              countResults += results.artist.length;
-            }
-            break;
           case 'album':
-            if (results.album) {
-              await Promise
-                .all(results.album.map(i => fetchAlbum(i.id).catch(err => error = err)))
-                .then(albums => {
-                  results.album = albums.map(i => formatAlbumToStandard(i))
-                  countResults += results.album.length;
-                }).catch(err => error = err);
-            }
+            await Promise
+              .all(results.filter(i => i._obj == 'album').map(i => fetchAlbum(i.id).catch(err => error = err)))
+              .then(albums => {
+                results.album = albums.map(i => formatAlbumToStandard(i))
+              }).catch(err => error = err);
             break;
           case 'track':
-            if (results.track) {
-              await Promise
-                .all(results.track.map(i => fetchTrack(i.id).catch(err => error = err)))
-                .then(tracks => {
-                  results.track = tracks.map(i => formatTrackToStandard(i))
-                  countResults += results.track.length;
-                }).catch(err => error = err);
-            }
-            break;
-          case 'user':
-            if (results.user) {
-              results.user = results.user.filter(item => item.name.toUpperCase() == query.toUpperCase())
-              countResults += results.user.length;
-            }
+            await Promise
+              .all(results.filter(i => i && i._obj == 'track').map(i => fetchTrack(i.id).catch(err => error = err)))
+              .then(albums => {
+                results.album = albums.map(i => formatAlbumToStandard(i))
+              }).catch(err => error = err);
             break;
         }
       })
-      results.total = countResults;
     }
   } else {
     error = utils.error("Bad t paramater", 400)
   }
 
   return new Promise((resolve, reject) => {
-    if (countResults == 0) {
+    if (results.length == 0) {
       if (error) {
         reject(error)
       } else {
@@ -972,7 +956,6 @@ function formatAlbumToFeed(album) {
 }
 
 function formatPlaylistToFeed(playlist) {
-  console.log(playlist)
   return {
     _obj: 'playlist',
     _from: 'deezer',

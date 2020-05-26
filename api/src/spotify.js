@@ -170,7 +170,7 @@ async function fetchSearch(access_token, type, query, strict) {
 async function getSearch(access_token, query, types = "*", strict = true) {
   const allowedTypes = ['artist', 'album', 'playlist', 'track'];
   var search_types = [];
-  var results = new Object, countResults = 0;
+  var results = [];
   var error;
 
   if (types == "*") {
@@ -189,72 +189,54 @@ async function getSearch(access_token, query, types = "*", strict = true) {
         .then((result) => {
           switch(type) {
             case 'artist':
-              results.artist = result.artists.items.map(i => formatArtistToStandard(i));
-              countResults += results.artist.length || 0;
+              //results.artist = result.artists.items.map(i => formatArtistToStandard(i));
+              Array.prototype.push.apply(results, result.artists.items.map(i => formatArtistToStandard(i)));
 
               break;
             case 'album':
-              results.album = result.albums.items.map(i => formatAlbumToStandard(i));
-              countResults += results.album.length || 0;
+              //results.album = result.albums.items.map(i => formatAlbumToStandard(i));
+              Array.prototype.push.apply(results, result.albums.items.map(i => formatAlbumToStandard(i)));
               break;
             case 'playlist':
-              results.playlist = result.playlists.items.map(i => formatPlaylistToStandard(i));
-              countResults += results.playlist.length || 0;
+              //results.playlist = result.playlists.items.map(i => formatPlaylistToStandard(i));
+              Array.prototype.push.apply(results, result.playlists.items.map(i => formatPlaylistToStandard(i)));
               break;
             case 'track':
-              results.track = result.tracks.items.map(i => formatTrackToStandard(i));
-              countResults += results.track.length || 0;
+              //results.track = result.tracks.items.map(i => formatTrackToStandard(i));
+              Array.prototype.push.apply(results, result.tracks.items.map(i => formatTrackToStandard(i)));
               break;
           }
         })
         .catch(err => error = err)
     })
-    results.total = countResults;
 
     if (strict) {
-      countResults = 0;
+      results = results.filter(item => item.name.toUpperCase().includes(query.toUpperCase()));
       await utils.asyncForEach(search_types, async (type) => {
         switch(type) {
-          case 'artist':
-            if (results.artist) {
-              results.artist = results.artist.filter(item => item.name.toUpperCase() == query.toUpperCase())
-              countResults += results.artist.length;
-            }
-            break;
           case 'album':
-            if (results.album) {
-              await Promise
-                .all(results.album.map(i => fetchAlbum(access_token, i.id).catch(err => error = err)))
-                .then(albums => {
-                  results.album = albums.map(i => formatAlbumToStandard(i))
-                  countResults += results.album.length;
-                }).catch(err => error = err);
-            }
+            await Promise
+              .all(results.filter(i => i._obj == 'album').map(i => fetchAlbum(access_token, i.id).catch(err => error = err)))
+              .then(albums => {
+                results.album = albums.map(i => formatAlbumToStandard(i))
+              }).catch(err => error = err);
             break;
-          case 'playlist':
-              results.playlist = results.playlist.filter(item => item.name.toUpperCase() == query.toUpperCase())
-              countResults += results.playlist.length || 0;
-              break;
           case 'track':
-            if (results.track) {
-              await Promise
-                .all(results.track.map(i => fetchTrack(access_token, i.id).catch(err => error = err)))
-                .then(tracks => {
-                  results.track = tracks.map(i => formatTrackToStandard(i))
-                  countResults += results.track.length;
-                }).catch(err => error = err);
-            }
+            await Promise
+              .all(results.filter(i => i._obj == 'track').map(i => fetchTrack(access_token, i.id).catch(err => error = err)))
+              .then(tracks => {
+                results.track = tracks.map(i => formatTrackToStandard(i))
+              }).catch(err => error = err);
             break;
         }
       })
-      results.total = countResults;
     }
   } else {
     error = utils.error("Bad t paramater", 400)
   }
 
   return new Promise((resolve, reject) => {
-    if (countResults == 0) {
+    if (results.length == 0) {
       if (error) {
         reject(error)
       } else {

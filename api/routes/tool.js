@@ -64,4 +64,22 @@ router.get('/isrc', (req, res, next) => {
   }
 });
 
+
+router.get('/search', (req, res, next) => {
+  if (!req.query.q) {
+    next(utils.error("Missing q parameter", 400));
+  } else if (!req.user) {
+    next(utils.error("No user provided", 400));
+  } else {
+    const query = req.query.q;
+    const user = req.user;
+
+    tool.crossSearch(user, query).then(data => {
+      res.status(200).json({
+        'data': data,
+      })
+    }).catch(err => next(err));
+  }
+});
+
 module.exports = router;
