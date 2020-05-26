@@ -3,7 +3,7 @@ const sleep = require('await-sleep');
 const moment = require('moment');
 const utils = require('../../utils');
 
-const call_limit = 100; // Limit of items to retrieve
+const call_limit = 50; // Limit of items to retrieve
 const retry_limit = 8; // Limit number of retry
 const retry_timeout = 1800; // Limit number of retry
 
@@ -52,7 +52,7 @@ function genericHttps(access_token, path) {
     var result = null;
     var error = null;
     var retry = retry_limit;
-
+    
     // get the general data of the artist
     do {
       const options = {
@@ -105,15 +105,30 @@ function recursiveHttps(access_token, path) {
       };
 
       try {
-        let response = httpsCall(options);
-        Array.prototype.push.apply(result, response.data)
-        if(response.next) { // if has a next object, keep going
-          recursive(index+call_limit)
-            .catch(() => resolve(result)); // resolve the iterations if an error happens
-        } else { // no more page, resolve with the result
-          resolve(result);
+        let response = await httpsCall(options);
+
+        var itemMainKey = Object.keys(response)[0];
+
+        if (response[itemMainKey].items) {
+          Array.prototype.push.apply(result, response[itemMainKey].items)
+          if(response[itemMainKey].next) { // if has a next object, keep going
+            recursive(index+call_limit)
+              .catch(() => resolve(result)); // resolve the iterations if an error happens
+          } else { // no more page, resolve with the result
+            resolve(result);
+          }
+        } else if (response.items) {
+          Array.prototype.push.apply(result, response.items)
+          if(response.next) { // if has a next object, keep going
+            recursive(index+call_limit)
+              .catch(() => resolve(result)); // resolve the iterations if an error happens
+          } else { // no more page, resolve with the result
+            resolve(result);
+          }
+        } else {
+          throw utils.error("Unvalid data", 500);
         }
-      } catch(err) {
+      } catch(error) {
         if (retry > 0 && error.code == 429) { // too many request and still have a retry, so wait for a delay and get back
           setTimeout(recursive, retry_timeout, index, retry-1);
         } else {
@@ -258,7 +273,7 @@ function searchAlbumUPC(access_token, query, upc) {
     var album = null;
     var error = null;
     var index = 0;
-    var limit = call_limit/2; // improve the performances due to fullAlbums.filter
+    var limit = call_limit; // improve the performances due to fullAlbums.filter
     var total = limit;
     
     var albums, fullAlbums;
@@ -274,7 +289,7 @@ function searchAlbumUPC(access_token, query, upc) {
             fullAlbums = await Promise.all(albums.albums.items.map(i => fetchAlbum(access_token, i.id)));
             // fullAlbums = await Promise.all(albums.albums.items.filter(i => utils.checkSize(query, i.name)).map(i => fetchAlbum(access_token, i.id)));
           } finally {
-            if (fullAlbums && fullAlbums.length > 0) {
+            if (fullAlbums) {
               album = fullAlbums.filter(a => a.external_ids.upc == upc);
               album = album[0] ? formatAlbumToStandard(album[0]) : null;
             } else {
@@ -323,7 +338,7 @@ function searchTrackISRC(access_token, query, isrc) {
             fullTracks = await Promise.all(tracks.tracks.items.filter(i => utils.checkSize(query, i.title)).map(i => fetchTrack(access_token, i.id)))
             //fullAlbums = await Promise.all(albums.data.map(i => fetchAlbum(i.id)))
           } finally {
-            if (fullTracks && fullTracks.length > 0) {
+            if (fullTracks) {
               track = fullTracks.filter(a => a.external_ids.isrc == isrc);
               track = track[0] ? formatTrackToStandard(track[0]) : null;
             } else {
@@ -352,6 +367,167 @@ function searchTrackISRC(access_token, query, isrc) {
 
 
 /**
+ * getMyReleases
+ * @params user_id
+ * @params access_token
+ */
+async function getMyReleases(access_token) {
+  const user_id = 'me';
+  var releases = [];
+  var error;
+
+  const artists = await fetchArtists(access_token, user_id).catch(err => error = err);
+
+  if(artists && artists.length > 0) {
+    await Promise
+      .all(artists.map(i => 
+        fetchArtist(access_token, i.id).catch(err => error = err))
+      )
+      .then(results => {
+        results.forEach((a) => {
+          if (a.albums && a.albums.length > 0) {
+            releases.push(formatArtistToFeed(a));
+          }
+        })
+      }).catch(err => error = err);
+  }
+  
+  var genres = [];
+  if(releases && releases.length > 0) {
+    var availableGenres = [];
+    releases.forEach(i => {
+      Array.prototype.push.apply(availableGenres, i.content.genre.split(':'))
+    })
+    genres = [...new Set(availableGenres.sort())];
+    genres.unshift("Tous");
+
+    var key = 0;
+    genres = genres.map(i => new Object({
+      key: ++key,
+      value: i,
+    }))
+  }
+  releases.genres = genres;
+
+  /*
+  const playlists = await fetchPlaylists(user_id, access_token).catch(err => error = err);
+  if(playlists && playlists.length > 0) {
+    playlists.forEach(p => {
+      if(!p.is_loved_track && p.creator.id != user_id) {
+        releases.push(formatPlaylistToFeed(p));
+      }
+    });
+  }*/
+
+  return new Promise((resolve, reject) => {
+    if (releases.length == 0) {
+      if (error) {
+        reject(error);
+      } else {
+        reject(utils.error("No content"), 200);
+      }
+    } else {
+      //releases.sort((a,b) => sortLastReleases(a,b));
+      resolve(releases)
+    }
+  });
+}
+
+
+/**
+ * getReleaseContent
+ * @params obj
+ * @params id
+ */
+function getReleaseContent(access_token, obj, id) {
+  return new Promise((resolve, reject) => {
+    if(obj === 'album') {
+      // retrieve the general content
+      const promise = fetchAlbum(access_token, id)
+        .then((response) => {
+          resolve(formatAlbumToFeed(response));
+          //return formatAlbumToFeed(response);
+        }).catch(err => reject(err));
+
+      // retrieve the related artists
+      promise.then((release) => {
+        getRelatedArtists(access_token, release.author.id).then((response) => {
+          release.related = response;
+          release.related.sort((a,b) => sortLastReleases(a,b));
+          resolve(release);
+        }).catch(err => reject(err));
+      }).catch(err => reject(err));
+    } /*else if (obj === 'playlist') {
+      getPlaylistContent(id)
+        .then((response) => {       
+          resolve(formatPlaylistToFeed(response));          
+        }).catch(err => reject(err));
+    }*/ else {
+      reject(utils.error('No content', 200))
+    }
+  });
+}
+
+/**
+ * fetchArtists
+ * @params user_id
+ * @params access_token
+ */
+function fetchArtists(access_token, user_id) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/me/following?type=artist&';
+    recursiveHttps(access_token, path)
+      .then(result => {
+        resolve(result)
+      })
+      .catch(error => reject(error));
+  });
+}
+
+/**
+ * fetchArtist
+ * @params id
+ */
+function fetchArtist(access_token, id) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/artists/' + id;
+    genericHttps(access_token, path)
+      .then(result => {
+        return result
+      })
+      .then(async (artist) => {
+        await fetchArtistAlbums(access_token, id) // await for the response
+          .then(artistAlbums => {
+            artist.albums = artistAlbums.sort((a,b) => sortAlbums(a,b));
+            resolve(artist);
+          });
+      })
+      .catch(error => {
+        reject(error)
+      });
+  });
+}
+
+/**
+ * fetchArtistAlbums
+ * @params artist_id
+ * @params access_token
+ */
+function fetchArtistAlbums(access_token, artist_id) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/artists/' + artist_id + '/albums?';
+    recursiveHttps(access_token, path)
+      .then(artistAlbums => {
+        resolve(artistAlbums);
+      })
+      .catch(error => {
+        reject(error)
+      });
+  });
+}
+
+
+/**
  * fetchAlbum
  * @params id
  */
@@ -373,6 +549,21 @@ function fetchAlbum(access_token, id) {
 function fetchTrack(access_token, id) {
   return new Promise((resolve, reject) => {
     const path = '/v1/tracks/'+id;
+    genericHttps(access_token, path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
+}
+
+/**
+ * getGenres
+ * @params id
+ */
+function getGenres(access_token) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/recommendations/available-genre-seeds';
     genericHttps(access_token, path)
       .then(result => {
         resolve(result);
@@ -432,15 +623,15 @@ function formatPlaylistToStandard(playlist){
   };
 }
 
-function formatTrackToStandard(track){  
+function formatTrackToStandard(track){
   return {
     _obj: 'track',
     _uid: 'spotify-'+track.type+'-'+track.id,
     // Related to the author
     id: track.id,
     name: track.name,
-    link: track.external_urls.spotify ? track.external_urls.spotify : "https://open.spotify.com/track/"+track.id,
-    isrc: track.external_ids.isrc || null,
+    link: track.external_urls ? track.external_urls.spotify : "https://open.spotify.com/track/"+track.id,
+    isrc: track.external_ids ? track.external_ids.isrc : null,
     preview: track.preview_url,
     duration: track.duration_ms ? timestampToTime(track.duration_ms) : null,
     artist: track.artists.map(i => formatArtistToStandard(i))
@@ -457,6 +648,72 @@ function formatUserToStandard(user){
     profile: user.external_urls.spotify,
     fullname: null,
     picture: user.images[0] ? user.images[0].url : null,
+  };
+}
+
+//////////////////////////////
+// FORMAT TO FEED (RELEASE) //
+//////////////////////////////
+function formatArtistToFeed(artist){
+  const firstAlbum = artist.albums[0];
+  const firstArtistAlbum = artist.albums[0].artists[0];
+
+  return {
+    _obj: 'album',
+    _from: 'spotify',
+    _uid: 'deezer-'+firstAlbum.album_type+'-'+artist.id+'-'+artist.albums[0].id,
+    // Related to the author
+    author: {
+      id: firstArtistAlbum.id,
+      name: firstArtistAlbum.name,
+      picture: firstArtistAlbum.images && firstArtistAlbum.images.length > 0 ? firstArtistAlbum.images[0].url : null,
+      link: firstArtistAlbum.external_urls.spotify ? firstArtistAlbum.external_urls.spotify : null,
+      added_at: null,
+    },
+    // Related to the content
+    content: {
+      id: firstAlbum.id,
+      title: firstAlbum.name,
+      description: 'Based on your feed with ' + artist.name,
+      type: firstAlbum.album_type,
+      picture: firstAlbum.images[0] ? firstAlbum.images[0].url : null,
+      link: firstAlbum.external_urls.spotify,
+      upc: firstAlbum.upc || null,
+      genre: artist.genres ? artist.genres.join(':') : '',
+      updated_at: firstAlbum.release_date,
+      last: artist.albums[0],
+    }
+  };
+}
+
+function formatAlbumToFeed(album) {
+  const mainArtist = album.artists[0];
+  return {
+    _obj: 'album',
+    _from: 'spotify',
+    _uid: 'deezer-'+album.album_type+'-'+mainArtist.id+'-'+album.id,
+    // Related to the author
+    author: {
+      id: mainArtist.id,
+      name: mainArtist.name,
+      picture: mainArtist.images && mainArtist.images.length > 0 ? mainArtist.images[0].url : null,
+      link: mainArtist.external_urls.spotify,
+      added_at: null,
+    },
+    // Related to the content
+    content: {
+      id: album.id,
+      title: album.name,
+      description: 'Based on an album you liked',
+      type: album.album_type,
+      picture: album.images && album.images.length > 0 ? album.images[0].url : null,
+      link: album.url,
+      upc: album.external_ids.upc || null,
+      genre: album.genres.join(':') ? mainArtist.genres.join(':') : '',
+      updated_at: album.release_date,
+      tracks: album.tracks ? album.tracks.items.map(i => formatTrackToStandard(i)) : null,
+      last: album,
+    },
   };
 }
 
@@ -514,3 +771,6 @@ exports.getMeAccount = getMeAccount;
 exports.getSearch = getSearch;
 exports.searchAlbumUPC = searchAlbumUPC;
 exports.searchTrackISRC = searchTrackISRC;
+exports.getMyReleases = getMyReleases;
+exports.getReleaseContent = getReleaseContent;
+

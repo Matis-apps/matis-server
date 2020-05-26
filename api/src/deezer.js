@@ -365,7 +365,7 @@ async function getMyReleases(access_token) {
   }
   var genres = [];
   genres.push({key: -42, value: "Tous"})
-  if(artists && artists.length > 0) {
+  if(releases && releases.length > 0) {
     var availableGenres = [...new Set(releases.map(i => i.content.genre))];
     const call = await getGenres().catch(err => error = err);
     if(call && call.length > 0) {
@@ -732,9 +732,13 @@ function searchAlbumUPC(query, upc) {
             fullAlbums = await Promise.all(albums.data.map(i => fetchAlbum(i.id)));
             //fullAlbums = await Promise.all(albums.data.filter(i => utils.checkSize(query, i.title)).map(i => fetchAlbum(i.id)));
           } finally {
-            if (fullAlbums && fullAlbums.length > 0) {
+            if (fullAlbums) {
               album = fullAlbums.filter(a => a.upc == upc);
-              album = album[0] ? formatAlbumToStandard(album[0]) : null; 
+              album = album[0] ? formatAlbumToStandard(album[0]) : null;
+              if(!album) {
+                album = fullAlbums.filter(a => a.upc.substr(0,8) == upc.substr(0,8));
+                album = album[0] ? formatAlbumToStandard(album[0]) : null;
+              }
             } else {
               throw utils.error("Invalid data", 500)
             }
@@ -781,7 +785,7 @@ function searchTrackISRC(query, isrc) {
           try {
             fullTracks = await Promise.all(tracks.data.map(i => fetchTrack(i.id)))
           } finally {
-            if (fullTracks && fullTracks.length > 0) {
+            if (fullTracks) {
               track = fullTracks.filter(t => t.isrc == isrc);
               track = track[0] ? formatTrackToStandard(track[0]) : null; 
             } else {
@@ -911,6 +915,7 @@ function formatUserToStandard(user){
 function formatArtistToFeed(artist){
   return {
     _obj: 'album',
+    _from: 'deezer',
     _uid: 'deezer-'+artist.albums[0].record_type+'-'+artist.id+'-'+artist.albums[0].id,
     // Related to the author
     author: {
@@ -925,6 +930,7 @@ function formatArtistToFeed(artist){
       id: artist.albums[0].id,
       title: artist.albums[0].title,
       type: artist.albums[0].record_type,
+      description: 'Based on your feed with ' + artist.name,
       picture: artist.albums[0].cover_medium,
       link: artist.albums[0].link,
       upc: artist.albums[0].upc || null,
@@ -938,6 +944,7 @@ function formatArtistToFeed(artist){
 function formatAlbumToFeed(album) {
   return {
     _obj: 'album',
+    _from: 'deezer',
     _uid: 'deezer-'+album.record_type+'-'+album.artist.id+'-'+album.id,
     // Related to the author
     author: {
@@ -951,6 +958,7 @@ function formatAlbumToFeed(album) {
     content: {
       id: album.id,
       title: album.title,
+      description: 'Based on an album you liked',
       type: album.record_type,
       picture: album.cover_medium,
       link: album.link,
@@ -964,8 +972,10 @@ function formatAlbumToFeed(album) {
 }
 
 function formatPlaylistToFeed(playlist) {
+  console.log(playlist)
   return {
     _obj: 'playlist',
+    _from: 'deezer',
     _uid: 'deezer-'+playlist.type+'-'+playlist.creator.id+'-'+playlist.id,
     // Related to the author
     author: {
@@ -979,6 +989,7 @@ function formatPlaylistToFeed(playlist) {
     content: {
       id: playlist.id,
       title: playlist.title,
+      description: playlist.description,
       type: playlist.type,
       picture: playlist.picture_medium,
       link: playlist.link,

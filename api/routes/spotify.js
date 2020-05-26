@@ -3,9 +3,9 @@ const router = express.Router();
 const spotify = require('../src/spotify');
 const utils = require('../../utils');
 
-/*
+
 router.get('/me/releases', (req, res, next) => {
-  spotify.getMyReleases(req.deezer_token).then(data => {
+  spotify.getMyReleases(req.spotify_token).then(data => {
     res.status(200).json({
       'data': data,
       'genres': data.genres,
@@ -13,7 +13,7 @@ router.get('/me/releases', (req, res, next) => {
     })
   }).catch(err => next(err));
 });
-*/
+
 
 /*
 router.get('/releases/:friend_id', (req, res, next) => {
@@ -27,17 +27,18 @@ router.get('/releases/:friend_id', (req, res, next) => {
   }).catch(err => next(err));
 });
 */
-/*
-router.get('/release/:obj([a-z]+)/:id([0-9]+)', (req, res, next) => {
+
+router.get('/release/:obj([a-z]+)/:id([0-9a-zA-Z]+)', (req, res, next) => {
   const obj = req.params.obj;
   const id = req.params.id;
-  spotify.getReleaseContent(obj, id).then(data => {
+  console.log("ok")
+  spotify.getReleaseContent(req.spotify_token, obj, id).then(data => {
     res.status(200).json({
       'data': data,
     })
   }).catch(err => next(err));
 });
-*/
+
 
 /*
 router.get('/artist/:artist_id/related', (req, res, next) => {
