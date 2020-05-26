@@ -442,21 +442,26 @@ async function getReleases(user_id, access_token) {
   releases.genres = genres;
 
   const playlists = await fetchPlaylists(user_id, access_token).catch(err => error = err);
+
   if(playlists && playlists.length > 0) {
     playlists.forEach(p => {
       releases.push(formatPlaylistToFeed(p));
     });
   }
 
+
   const albums = await fetchAlbums(user_id, access_token).catch(err => error = err);
+
   if(albums && albums.length > 0) {
+
     albums.forEach(a => {
+
       let existingAlbum = releases.find(r => {
         return r.content.id == a.id && r.content.type == a.record_type;
       });
 
       if (! existingAlbum) {
-        releases.push(formatAbumToFeed(a));
+        releases.push(formatAlbumToFeed(a));
       }
     });
   }
