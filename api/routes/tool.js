@@ -3,6 +3,25 @@ const router = express.Router();
 const tool = require('../src/tool');
 const utils = require('../../utils');
 
+// middleware allowing to call middlware only if needed
+router.use((req, res, next) => {
+  const from = req.query.from || null;
+  if (typeof from === 'string') {
+    if (from != 'spotify') {
+      try {
+        require('../middleware/isSpotify').isSpotify(req, res, next); // needed to refresh the token
+        return;
+      } catch(err) {
+        next(err);
+      }
+    } else {
+      next()
+    }
+  } else {
+    next()
+  }
+});
+
 router.get('/upc', (req, res, next) => {
   if (!req.query.q) {
     next(utils.error("Missing q parameter", 400));
