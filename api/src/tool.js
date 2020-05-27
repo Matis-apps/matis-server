@@ -139,7 +139,7 @@ function unifySearch(result) {
           Array.prototype.push.apply(matchedAlbums, albums);
           result[plateform2].albums = remains;
         }
-
+  
         // Match tracks
         let tracks2 = result[plateform2].tracks;
         if (tracks1 && tracks2) {
@@ -151,8 +151,8 @@ function unifySearch(result) {
       
       if (matchedAlbums.length > 0) Array.prototype.push.apply(results.albums, matchedAlbums);
       if (matchedTracks.length > 0) Array.prototype.push.apply(results.tracks, matchedTracks);
-      if (result[plateform1].albums) delete result[plateform1].albums;
-      if (result[plateform1].tracks) delete result[plateform1].tracks;
+      if (result[plateform1].albums) result[plateform1].albums = [];
+      if (result[plateform1].tracks) result[plateform1].tracks = [];
 
     })
   }
@@ -202,7 +202,7 @@ function matchAlbums(albums1, albums2) {
     for(let i = 0; i < albums2.length; i++) {
       let i2 = albums2[i];
       if (i1.upc == i2.upc || (i1.name == i2.name && i1.release_date == i2.release_date)) {
-        albums2 = albums2.filter(i => i.upc != i2.upc);
+        albums2 = albums2.filter(i => i.upc != i2.upc || (i1.name != i2.name && i1.release_date != i2.release_date));
         matched.push(i2);
         break;
       }

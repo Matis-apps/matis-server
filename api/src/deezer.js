@@ -596,7 +596,7 @@ function getSocialFriends(user_id, access_token) {
         fetchFollowings(user_id, access_token).then((response) => {
           social.followings = response.map(i => formatUserToStandard(i)).sort((a,b) => sortFriends(a,b));
           resolve(social);
-        })
+        }).catch(err => reject(err));
       }).catch(err => reject(err));
     });
 }
