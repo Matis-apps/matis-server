@@ -6,16 +6,12 @@ const utils = require('../../utils');
 // middleware allowing to call middlware only if needed
 router.use((req, res, next) => {
   const from = req.query.from || null;
-  if (typeof from === 'string') {
-    if (from != 'spotify') {
-      try {
-        require('../middleware/isSpotify').isSpotify(req, res, next); // needed to refresh the token
-        return;
-      } catch(err) {
-        next(err);
-      }
-    } else {
-      next()
+  if ((typeof from === 'string' && from != 'spotify') || (from == null)) {
+    try {
+      require('../middleware/isSpotify').isSpotify(req, res, next); // needed to refresh the token
+      return;
+    } catch(err) {
+      next(err);
     }
   } else {
     next()

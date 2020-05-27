@@ -167,10 +167,10 @@ async function fetchSearch(access_token, type, query, strict) {
   });
 }
 
-async function getSearch(access_token, query, types = "*", strict = true) {
+async function getSearch(access_token, query, types = "*", strict = false) {
   const allowedTypes = ['artist', 'album', 'playlist', 'track'];
   var search_types = [];
-  var results = [];
+  var results = new Object;
   var error;
 
   if (types == "*") {
@@ -186,51 +186,38 @@ async function getSearch(access_token, query, types = "*", strict = true) {
   if (search_types.length > 0) {
     await utils.asyncForEach(search_types, async (type) => {
       await fetchSearch(access_token, type, query, strict)
-        .then((result) => {
+        .then(async (result) => {
+          var itemMainKey = Object.keys(result)[0];
+          if (strict && result[itemMainKey].items) {
+            result[itemMainKey].items = result[itemMainKey].items.filter(item => query.toUpperCase().includes(item.name.toUpperCase()));
+          }
           switch(type) {
             case 'artist':
-              //results.artist = result.artists.items.map(i => formatArtistToStandard(i));
-              Array.prototype.push.apply(results, result.artists.items.map(i => formatArtistToStandard(i)));
-
+              results.artists = result.artists.items.map(i => formatArtistToStandard(i));
               break;
             case 'album':
-              //results.album = result.albums.items.map(i => formatAlbumToStandard(i));
-              Array.prototype.push.apply(results, result.albums.items.map(i => formatAlbumToStandard(i)));
+              //Array.prototype.push.apply(results, result.albums.items.map(i => formatAlbumToStandard(i)));
+              await Promise
+                .all(result.albums.items.map(i => fetchAlbum(access_token, i.id).catch(err => error = err)))
+                .then(albums => {
+                  results.albums = albums.map(i => formatAlbumToStandard(i));
+                }).catch(err => error = err);
               break;
             case 'playlist':
-              //results.playlist = result.playlists.items.map(i => formatPlaylistToStandard(i));
-              Array.prototype.push.apply(results, result.playlists.items.map(i => formatPlaylistToStandard(i)));
+              results.playlists = result.playlists.items.map(i => formatPlaylistToStandard(i));
               break;
             case 'track':
-              //results.track = result.tracks.items.map(i => formatTrackToStandard(i));
-              Array.prototype.push.apply(results, result.tracks.items.map(i => formatTrackToStandard(i)));
+              //Array.prototype.push.apply(results, result.tracks.items.map(i => formatTrackToStandard(i)));
+              await Promise
+                .all(result.tracks.items.map(i => fetchTrack(access_token, i.id).catch(err => error = err)))
+                .then(tracks => {
+                  results.tracks =  tracks.map(i => formatTrackToStandard(i));
+                }).catch(err => error = err);
               break;
           }
         })
         .catch(err => error = err)
     })
-
-    if (strict) {
-      results = results.filter(item => item.name.toUpperCase().includes(query.toUpperCase()));
-      await utils.asyncForEach(search_types, async (type) => {
-        switch(type) {
-          case 'album':
-            await Promise
-              .all(results.filter(i => i._obj == 'album').map(i => fetchAlbum(access_token, i.id).catch(err => error = err)))
-              .then(albums => {
-                results.album = albums.map(i => formatAlbumToStandard(i))
-              }).catch(err => error = err);
-            break;
-          case 'track':
-            await Promise
-              .all(results.filter(i => i._obj == 'track').map(i => fetchTrack(access_token, i.id).catch(err => error = err)))
-              .then(tracks => {
-                results.track = tracks.map(i => formatTrackToStandard(i))
-              }).catch(err => error = err);
-            break;
-        }
-      })
-    }
   } else {
     error = utils.error("Bad t paramater", 400)
   }
@@ -240,7 +227,7 @@ async function getSearch(access_token, query, types = "*", strict = true) {
       if (error) {
         reject(error)
       } else {
-        reject(utils.error("No content", 200))
+        reject(utils.error("No content", 404))
       }
     } else {
       resolve(results)
@@ -406,7 +393,7 @@ async function getMyReleases(access_token) {
       if (error) {
         reject(error);
       } else {
-        reject(utils.error("No content"), 200);
+        reject(utils.error("No content"), 404);
       }
     } else {
       //releases.sort((a,b) => sortLastReleases(a,b));
@@ -445,7 +432,7 @@ function getReleaseContent(access_token, obj, id) {
           resolve(formatPlaylistToFeed(response));          
         }).catch(err => reject(err));
     }*/ else {
-      reject(utils.error('No content', 200))
+      reject(utils.error('No content', 404))
     }
   });
 }
@@ -560,6 +547,7 @@ function getGenres(access_token) {
 function formatArtistToStandard(artist) {
   return {
     _obj: 'artist',
+    _from: 'spotify',
     _uid: 'spotify-'+artist.type+'-'+artist.id,
     // Related to the author
     id: artist.id,
@@ -576,6 +564,7 @@ function formatArtistToStandard(artist) {
 function formatAlbumToStandard(album){
   return {
     _obj: 'album',
+    _from: 'spotify',
     _uid: 'spotify-'+album.album_type+'-'+album.id,
     // Related to the author
     id: album.id,
@@ -583,7 +572,7 @@ function formatAlbumToStandard(album){
     type: album.album_type,
     picture: album.images && album.images.length > 0 ? album.images[0].url : null,
     link: album.external_urls.spotify ? album.external_urls.spotify : "https://open.spotify.com/album/"+album.id,
-    upc: album.external_ids.upc || null,
+    upc: album.external_ids ? album.external_ids.upc : null,
     artists: album.artists.map(i => formatArtistToStandard(i)),
     updated_at: album.release_date,
     added_at: /*album.time_add ? timestampToDate(album.time_add) :*/ null,
@@ -593,6 +582,7 @@ function formatAlbumToStandard(album){
 function formatPlaylistToStandard(playlist){
   return {
     _obj: 'playlist',
+    _from: 'spotify',
     _uid: 'spotify-'+playlist.type+'-'+playlist.id,
     // Related to the author
     id: playlist.id,
@@ -608,6 +598,7 @@ function formatPlaylistToStandard(playlist){
 function formatTrackToStandard(track){
   return {
     _obj: 'track',
+    _from: 'spotify',
     _uid: 'spotify-'+track.type+'-'+track.id,
     // Related to the author
     id: track.id,
@@ -616,6 +607,7 @@ function formatTrackToStandard(track){
     isrc: track.external_ids ? track.external_ids.isrc : null,
     preview: track.preview_url,
     duration: track.duration_ms ? timestampToTime(track.duration_ms) : null,
+    updated_at: track.album ? track.album.release_date : null,
     artist: track.artists.map(i => formatArtistToStandard(i))
   };
 }
@@ -623,6 +615,7 @@ function formatTrackToStandard(track){
 function formatUserToStandard(user){
   return {
     _obj: 'user',
+    _from: 'spotify',
     _uid: 'spotify-'+user.type+'-'+user.id,
     // Related to the author
     id: user.id,

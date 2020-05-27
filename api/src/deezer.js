@@ -396,7 +396,7 @@ async function getMyReleases(access_token) {
       if (error) {
         reject(error);
       } else {
-        reject(utils.error("No content"), 200);
+        reject(utils.error("No content"), 404);
       }
     } else {
       releases.sort((a,b) => sortLastReleases(a,b));
@@ -478,7 +478,7 @@ async function getReleases(user_id, access_token) {
       if (error) {
         reject(error);
       } else {
-        reject(utils.error("No content"), 200);
+        reject(utils.error("No content"), 404);
       }
     } else {
       releases.sort((a,b) => sortLastReleases(a,b));
@@ -515,7 +515,7 @@ function getReleaseContent(obj, id) {
           resolve(formatPlaylistToFeed(response));          
         }).catch(err => reject(err));
     } else {
-      reject(utils.error('No content', 200))
+      reject(utils.error('No content', 404))
     }
   });
 }
@@ -603,7 +603,7 @@ function getSocialFriends(user_id, access_token) {
 
 function fetchSearch(type, query, strict) {
   return new Promise((resolve, reject) => {
-    const path = '/search/'+type+'?q='+encodeURI(query)+(strict == false ? '&sort=ranking&strict=on':'');
+    const path = '/search/'+type+'?q='+encodeURI(query)+(strict == false ? '&sort=ranking':'');
     genericHttps(path)
       .then(result => {
         resolve(result);
@@ -612,10 +612,10 @@ function fetchSearch(type, query, strict) {
   });
 }
 
-async function getSearch(query, types = "*", strict = true) {
+async function getSearch(query, types = "*", strict = false) {
   const allowedTypes = ['artist', 'album', 'playlist', 'track', 'user'];
   var search_types = [];
-  var results = [];
+  var results = new Object;
   var error;
 
   if (types == "*") {
@@ -631,63 +631,54 @@ async function getSearch(query, types = "*", strict = true) {
   if (search_types.length > 0) {
     await utils.asyncForEach(search_types, async (type) => {
       await fetchSearch(type, query, strict)
-        .then((result) => {
+        .then(async (result) => {
+          if (strict && result.data) {
+            result.data = result.data.filter(item => query.toUpperCase().includes(item.name ? item.name.toUpperCase() : item.title.toUpperCase()));
+          }
           switch(type) {
             case 'artist':
-              Array.prototype.push.apply(results, result.data.map(i => formatArtistToStandard(i)));
-              //results.artist = result.data.map(i => formatArtistToStandard(i));
+              results.artists = result.data.map(i => formatArtistToStandard(i));
               break;
             case 'album':
-              Array.prototype.push.apply(results, result.data.map(i => formatAlbumToStandard(i)));
-              //results.album = result.data.map(i => formatAlbumToStandard(i));
+              //Array.prototype.push.apply(results, result.data.map(i => formatAlbumToStandard(i)));
+              await Promise
+                .all(result.data.map(i => fetchAlbum(i.id).catch(err => error = err)))
+                .then(albums => {
+                  results.albums = albums.map(i => formatAlbumToStandard(i));
+                  //Array.prototype.push.apply(results, albums.map(i => formatAlbumToStandard(i)));
+                }).catch(err => error = err);
               break;
             case 'playlist':
-              Array.prototype.push.apply(results, result.data.map(i => formatPlaylistToStandard(i)));
-              //results.playlist = result.data.map(i => formatPlaylistToStandard(i));
+              results.playlists = result.data.map(i => formatPlaylistToStandard(i));
+              //Array.prototype.push.apply(results, result.data.map(i => formatPlaylistToStandard(i)));
               break;
             case 'track':
-              Array.prototype.push.apply(results, result.data.map(i => formatTrackToStandard(i)));
-              //results.track = result.data.map(i => formatTrackToStandard(i));
+              //Array.prototype.push.apply(results, result.data.map(i => formatTrackToStandard(i)));
+              await Promise
+                .all(result.data.map(i => fetchTrack(i.id).catch(err => error = err)))
+                .then(tracks => {
+                  results.tracks = tracks.map(i => formatTrackToStandard(i));
+                  //Array.prototype.push.apply(results, tracks.map(i => formatTrackToStandard(i)));                  
+                }).catch(err => error = err);
               break;
             case 'user':
-              Array.prototype.push.apply(results, result.data.map(i => formatUserToStandard(i)));
-              //results.user = result.data.map(i => formatUserToStandard(i));
+              results.users = result.data.map(i => formatUserToStandard(i));
+              //Array.prototype.push.apply(results, result.data.map(i => formatUserToStandard(i)));
               break;
           }
         })
     })
-
-    if (strict) {
-      results = results.filter(item => item.name.toUpperCase().includes(query.toUpperCase()));
-      await utils.asyncForEach(search_types, async (type) => {
-        switch(type) {
-          case 'album':
-            await Promise
-              .all(results.filter(i => i._obj == 'album').map(i => fetchAlbum(i.id).catch(err => error = err)))
-              .then(albums => {
-                results.album = albums.map(i => formatAlbumToStandard(i))
-              }).catch(err => error = err);
-            break;
-          case 'track':
-            await Promise
-              .all(results.filter(i => i && i._obj == 'track').map(i => fetchTrack(i.id).catch(err => error = err)))
-              .then(albums => {
-                results.album = albums.map(i => formatAlbumToStandard(i))
-              }).catch(err => error = err);
-            break;
-        }
-      })
-    }
   } else {
     error = utils.error("Bad t paramater", 400)
   }
 
+
   return new Promise((resolve, reject) => {
-    if (results.length == 0) {
+    if (Object.keys(results).length == 0) {
       if (error) {
         reject(error)
       } else {
-        reject(utils.error("No content", 200))
+        reject(utils.error("No content", 404))
       }
     } else {
       resolve(results)
@@ -802,6 +793,7 @@ function searchTrackISRC(query, isrc) {
 function formatArtistToStandard(artist) {
   return {
     _obj: 'artist',
+    _from: 'deezer',
     _uid: 'deezer-'+artist.type+'-'+artist.id,
     // Related to the author
     id: artist.id,
@@ -827,6 +819,7 @@ function formatAlbumToStandard(album){
 
   return {
     _obj: 'album',
+    _from: 'deezer',
     _uid: 'deezer-'+album.record_type+'-'+album.id,
     // Related to the author
     id: album.id,
@@ -844,6 +837,7 @@ function formatAlbumToStandard(album){
 function formatPlaylistToStandard(playlist){
   return {
     _obj: 'playlist',
+    _from: 'deezer',
     _uid: 'deezer-'+playlist.type+'-'+playlist.id,
     // Related to the author
     id: playlist.id,
@@ -865,9 +859,9 @@ function formatTrackToStandard(track){
       artists = [... contributors];
     }
   }
-
   return {
     _obj: 'track',
+    _from: 'deezer',
     _uid: 'deezer-'+track.type+'-'+track.id,
     // Related to the author
     id: track.id,
@@ -876,6 +870,7 @@ function formatTrackToStandard(track){
     isrc: track.isrc || null,
     preview: track.preview,
     duration: track.duration ? timestampToTime(track.duration) : null,
+    updated_at: track.time_add ? timestampToDate(track.time_add) : track.album ? track.album.release_date : null,
     artist: artists
   };
 }
@@ -883,6 +878,7 @@ function formatTrackToStandard(track){
 function formatUserToStandard(user){
   return {
     _obj: 'user',
+    _from: 'deezer',
     _uid: 'deezer-'+user.type+'-'+user.id,
     // Related to the author
     id: user.id,
