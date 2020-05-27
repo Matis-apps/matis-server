@@ -1,6 +1,7 @@
 const https = require('https');
 const sleep = require('await-sleep');
-const moment = require('moment');
+const moment1 = require('moment');
+const moment2 = require('moment-timezone');
 const utils = require('../../utils');
 
 const call_limit = 50; // Limit of items to retrieve
@@ -143,7 +144,7 @@ function recursiveHttps(access_token, path) {
 
 async function getMeAccount(access_token) {
   return new Promise((resolve, reject) => {
-    const path = '/v1/me/';
+    const path = '/v1/me';
     genericHttps(access_token, path)
       .then(result => {
         resolve(result)
@@ -166,6 +167,35 @@ async function fetchSearch(access_token, type, query, strict) {
       })
   });
 }
+
+
+async function fetchPlaylists(access_token) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/me/playlists';
+    genericHttps(access_token, path)
+      .then(result => {
+        resolve(result)
+      })
+      .catch(error => {
+        reject(error)
+      })
+  });
+}
+
+async function fetchPlaylist(access_token, id) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/playlists/'+id;
+    genericHttps(access_token, path)
+      .then(result => {
+        resolve(result)
+      })
+      .catch(error => {
+        reject(error)
+      })
+  });
+}
+
+
 
 async function getSearch(access_token, query, types = "*", strict = false) {
   const allowedTypes = ['artist', 'album', 'playlist', 'track'];
@@ -345,7 +375,7 @@ async function getMyReleases(access_token) {
   var releases = [];
   var error;
 
-  const artists = await fetchArtists(access_token, user_id).catch(err => error = err);
+  const artists = await fetchArtists(access_token).catch(err => error = err);
 
   if(artists && artists.length > 0) {
     await Promise
@@ -378,15 +408,18 @@ async function getMyReleases(access_token) {
   }
   releases.genres = genres;
 
-  /*
-  const playlists = await fetchPlaylists(user_id, access_token).catch(err => error = err);
-  if(playlists && playlists.length > 0) {
-    playlists.forEach(p => {
-      if(!p.is_loved_track && p.creator.id != user_id) {
-        releases.push(formatPlaylistToFeed(p));
-      }
-    });
-  }*/
+  const playlists = await fetchPlaylists(access_token).catch(err => error = err);
+  if(playlists && playlists.items) {
+    await Promise
+      .all(playlists.items.map(i => 
+        fetchPlaylist(access_token, i.id).catch(err => error = err))
+      )
+      .then(results => {
+        results.forEach((a) => {
+          releases.push(formatPlaylistToFeed(a));
+        })
+      }).catch(err => error = err);
+  }
 
   return new Promise((resolve, reject) => {
     if (releases.length == 0) {
@@ -396,7 +429,7 @@ async function getMyReleases(access_token) {
         reject(utils.error("No content"), 404);
       }
     } else {
-      //releases.sort((a,b) => sortLastReleases(a,b));
+      releases.sort((a,b) => sortLastReleases(a,b));
       resolve(releases)
     }
   });
@@ -442,7 +475,7 @@ function getReleaseContent(access_token, obj, id) {
  * @params user_id
  * @params access_token
  */
-function fetchArtists(access_token, user_id) {
+function fetchArtists(access_token) {
   return new Promise((resolve, reject) => {
     const path = '/v1/me/following?type=artist&';
     recursiveHttps(access_token, path)
@@ -557,7 +590,7 @@ function formatArtistToStandard(artist) {
     albums: /*artist.albums ? artist.albums.data.map(i => formatAlbumToStandard(i)) :*/ null,
     nb_albums: /*artist.nb_album ? artist.nb_album :*/ null,
     nb_fans: artist.followers ? artist.followers.total : null,
-    added_at: /*artist.time_add ? timestampToDate(artist.time_add) :*/ null,
+    added_at: null,
   };
 }
 
@@ -575,7 +608,7 @@ function formatAlbumToStandard(album){
     upc: album.external_ids ? album.external_ids.upc : null,
     artists: album.artists.map(i => formatArtistToStandard(i)),
     updated_at: album.release_date,
-    added_at: /*album.time_add ? timestampToDate(album.time_add) :*/ null,
+    added_at: null,
   };
 }
 
@@ -590,8 +623,8 @@ function formatPlaylistToStandard(playlist){
     description: playlist.description,
     picture: playlist.images && playlist.images.length > 0 ? playlist.images[0].url : null,
     link: playlist.external_urls.spotify ? playlist.external_urls.spotify : "https://open.spotify.com/playlist/"+playlist.id,
-    updated_at: /*playlist.time_mod ? timestampToDate(playlist.time_mod) :*/ null,
-    added_at: /*playlist.time_add ? timestampToDate(playlist.time_add) :*/ null,
+    updated_at: null,
+    added_at: null,
   };
 }
 
@@ -608,7 +641,7 @@ function formatTrackToStandard(track){
     preview: track.preview_url,
     duration: track.duration_ms ? timestampToTime(track.duration_ms) : null,
     updated_at: track.album ? track.album.release_date : null,
-    artist: track.artists.map(i => formatArtistToStandard(i))
+    artist: track.artists ? track.artists.map(i => formatArtistToStandard(i)) : track.track.artists.map(i => formatArtistToStandard(i))
   };
 }
 
@@ -642,7 +675,7 @@ function formatArtistToFeed(artist){
       id: firstArtistAlbum.id,
       name: firstArtistAlbum.name,
       picture: firstArtistAlbum.images && firstArtistAlbum.images.length > 0 ? firstArtistAlbum.images[0].url : null,
-      link: firstArtistAlbum.external_urls.spotify ? firstArtistAlbum.external_urls.spotify : null,
+      link: firstArtistAlbum.external_urls.spotify ? firstArtistAlbum.external_urls.spotify :  "https://open.spotify.com/artist/"+artist.id,
       added_at: null,
     },
     // Related to the content
@@ -682,12 +715,42 @@ function formatAlbumToFeed(album) {
       description: 'Based on an album you liked',
       type: album.album_type,
       picture: album.images && album.images.length > 0 ? album.images[0].url : null,
-      link: album.url,
+      link: album.external_urls.spotify,
       upc: album.external_ids.upc || null,
       genre: album.genres.join(':') ? mainArtist.genres.join(':') : '',
       updated_at: album.release_date,
       tracks: album.tracks ? album.tracks.items.map(i => formatTrackToStandard(i)) : null,
       last: album,
+    },
+  };
+}
+
+function formatPlaylistToFeed(playlist) {
+  return {
+    _obj: 'playlist',
+    _from: 'spotify',
+    _uid: 'spotify-'+playlist.type+'-'+playlist.owner.id+'-'+playlist.id,
+    // Related to the author
+    author: {
+      id: playlist.owner.id,
+      name: playlist.owner.display_name,
+      picture: null,
+      link: playlist.owner.external_urls.spotify,
+      added_at: null, 
+    },
+    // Related to the content
+    content: {
+      id: playlist.id,
+      title: playlist.name,
+      description: playlist.description,
+      type: playlist.type,
+      picture: playlist.images && playlist.images.length > 0 ? playlist.images[0].url : null,
+      link: playlist.external_urls.spotify,
+      genre: null,
+      updated_at: playlist.tracks && playlist.tracks.items ? timestampToDate(Math.max.apply(null, playlist.tracks.items.map(i => timezoneToTimestamp(i.added_at))))
+                : null, 
+      tracks: playlist.tracks && playlist.tracks.items ? playlist.tracks.items.map(i => formatTrackToStandard(i)) : null,
+      last: playlist,
     },
   };
 }
@@ -734,12 +797,12 @@ function sortFriends ( a, b ) {
   return 0;
 }
 
-function timestampToDate(seconds) {
-  return moment.unix(seconds/1000).format("YYYY-MM-DD");
+function timezoneToTimestamp(timezone) {
+  return moment2.tz(timezone,'Europe/Paris').unix();
 }
 
-function timestampToTime(seconds) {
-  return moment.unix(seconds/1000).format("mm:ss");
+function timestampToDate(timestamp) {
+  return moment1.unix(timestamp).format("YYYY-MM-DD");
 }
 
 exports.getMeAccount = getMeAccount;

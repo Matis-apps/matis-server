@@ -787,6 +787,15 @@ function searchTrackISRC(query, isrc) {
   });
 }
 
+function getMyPlaylists(access_token) {
+  return new Promise((resolve, reject) => {
+    fetchPlaylists('me', access_token)
+    .then((response) => {
+      resolve(response.map(i => formatPlaylistToStandard(i)))
+    }).catch(err => reject(err));
+  });
+}
+
 ////////////////////////
 // FORMAT TO STANDARD //
 ////////////////////////
@@ -1025,8 +1034,8 @@ function sortFriends ( a, b ) {
   return 0;
 }
 
-function timestampToDate(seconds) {
-  return moment.unix(seconds).format("YYYY-MM-DD");
+function timestampToDate(timestamp) {
+  return moment.unix(timestamp).format("YYYY-MM-DD");
 }
 
 function timestampToTime(seconds) {
@@ -1046,3 +1055,5 @@ exports.getSocialFriends = getSocialFriends;
 exports.getSearch = getSearch;
 exports.searchAlbumUPC = searchAlbumUPC;
 exports.searchTrackISRC = searchTrackISRC;
+exports.getMyPlaylists = getMyPlaylists;
+

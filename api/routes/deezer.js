@@ -70,4 +70,13 @@ router.get('/search', (req, res, next) => {
   }
 });
 
+router.get('/me/playlists', (req, res, next) => {
+  deezer.getMyPlaylists(req.deezer_token).then(data => {
+    res.status(200).json({
+      'data': data,
+      'count': data.length,
+    })
+  }).catch(err => next(err));
+});
+
 module.exports = router;
