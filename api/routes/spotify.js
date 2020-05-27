@@ -80,4 +80,14 @@ router.get('/search', (req, res, next) => {
   }
 });
 
+router.get('/me/playlists', (req, res, next) => {
+  spotify.getMyPlaylists(req.spotify_token).then(data => {
+    res.status(200).json({
+      'data': data,
+      'count': data.length,
+    })
+  }).catch(err => next(err));
+});
+
+
 module.exports = router;

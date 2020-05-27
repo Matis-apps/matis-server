@@ -171,8 +171,8 @@ async function fetchSearch(access_token, type, query, strict) {
 
 async function fetchPlaylists(access_token) {
   return new Promise((resolve, reject) => {
-    const path = '/v1/me/playlists';
-    genericHttps(access_token, path)
+    const path = '/v1/me/playlists?';
+    recursiveHttps(access_token, path)
       .then(result => {
         resolve(result)
       })
@@ -409,9 +409,9 @@ async function getMyReleases(access_token) {
   releases.genres = genres;
 
   const playlists = await fetchPlaylists(access_token).catch(err => error = err);
-  if(playlists && playlists.items) {
+  if(playlists && playlists.length > 0) {
     await Promise
-      .all(playlists.items.map(i => 
+      .all(playlists.map(i => 
         fetchPlaylist(access_token, i.id).catch(err => error = err))
       )
       .then(results => {
@@ -467,6 +467,15 @@ function getReleaseContent(access_token, obj, id) {
     }*/ else {
       reject(utils.error('No content', 404))
     }
+  });
+}
+
+function getMyPlaylists(access_token) {
+  return new Promise((resolve, reject) => {
+    fetchPlaylists(access_token)
+    .then((response) => {
+      resolve(response.map(i => formatPlaylistToStandard(i)))
+    }).catch(err => reject(err));
   });
 }
 
@@ -811,4 +820,5 @@ exports.searchAlbumUPC = searchAlbumUPC;
 exports.searchTrackISRC = searchTrackISRC;
 exports.getMyReleases = getMyReleases;
 exports.getReleaseContent = getReleaseContent;
+exports.getMyPlaylists = getMyPlaylists;
 
