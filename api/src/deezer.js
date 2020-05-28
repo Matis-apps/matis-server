@@ -49,7 +49,7 @@ function httpsCall(options) {
   })
 }
 
-function genericHttps(path) {
+function genericHttps(access_token, path) {
   return new Promise(async (resolve, reject) => {
     var result = null;
     var error = null;
@@ -59,7 +59,7 @@ function genericHttps(path) {
     do {
       const options = {
           hostname: 'api.deezer.com',
-          path: path,
+          path: path + (access_token ? '?access_token=' + access_token : '' ),
           method: 'GET',
           headers: {
             'content-type': 'text/json'
@@ -85,7 +85,7 @@ function genericHttps(path) {
   })
 }
 
-function recursiveHttps(path) {
+function recursiveHttps(access_token, path) {
   return new Promise((resolve, reject) => {
     var result = [];
     /**
@@ -97,7 +97,7 @@ function recursiveHttps(path) {
       // Configuration of the https request
       const options = {
         hostname: 'api.deezer.com',
-        path: path + 'index=' + index + '&limit='+call_limit,
+        path: path + 'index=' + index + '&limit=' + call_limit + (access_token ? '&access_token=' + access_token : '' ),
         method: 'GET',
         headers: {
           'content-type': 'text/json'
@@ -126,15 +126,19 @@ function recursiveHttps(path) {
   })
 }
 
+////////////////
+// FETCH DATA //
+////////////////
+
 /**
  * fetchArtists
  * @params user_id
  * @params access_token
  */
-function fetchArtists(user_id, access_token) {
+function fetchArtists(access_token, user_id) {
   return new Promise((resolve, reject) => {
     const path = '/user/' + user_id + '/artists?access_token=' + access_token + '&';
-    recursiveHttps(path)
+    recursiveHttps(access_token, path)
       .then(result => {
         resolve(result)
       })
@@ -145,33 +149,18 @@ function fetchArtists(user_id, access_token) {
 }
 
 /**
- * getArtists
- * @params user_id
- * @params access_token
- */
-function getArtists(user_id = 'me', access_token) {
-  return new Promise((resolve, reject) => {
-    fetchArtists(user_id, access_token)
-      .then(result => {
-        resolve(result.map(i => formatArtistToStandard(i)))
-      })
-      .catch(err => reject(err));
-  });
-}
-
-/**
  * fetchArtist
  * @params id
  */
-function fetchArtist(id) {
+function fetchArtist(access_token, id) {
   return new Promise((resolve, reject) => {
     const path = '/artist/' + id;
-    genericHttps(path)
+    genericHttps(access_token, path)
       .then(result => {
         return result
       })
       .then(async (artist) => {
-        await fetchArtistAlbums(id) // await for the response
+        await fetchArtistAlbums(access_token, id) // await for the response
           .then(artistAlbums => {
             artist.albums = artistAlbums.sort((a,b) => sortAlbums(a,b));
             resolve(artist);
@@ -188,10 +177,10 @@ function fetchArtist(id) {
  * @params artist_id
  * @params access_token
  */
-function fetchArtistAlbums(artist_id, access_token) {
+function fetchArtistAlbums(access_token, artist_id) {
   return new Promise((resolve, reject) => {
     const path = '/artist/' + artist_id + '/albums?';
-    recursiveHttps(path)
+    recursiveHttps(access_token, path)
       .then(artistAlbums => {
         resolve(artistAlbums);
       })
@@ -202,12 +191,162 @@ function fetchArtistAlbums(artist_id, access_token) {
 }
 
 /**
+ * fetchAlbums
+ * @params user_id
+ * @params access_token
+ */
+function fetchAlbums(access_token, user_id = 'me') {
+  return new Promise((resolve, reject) => {
+    const path = '/user/' + user_id + '/albums?access_token=' + access_token + '&';
+    recursiveHttps(access_token, path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
+}
+
+/**
+ * fetchAlbum
+ * @params id
+ */
+function fetchAlbum(access_token, id) {
+  return new Promise((resolve, reject) => {
+    const path = '/album/'+id;
+    genericHttps(access_token, path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
+}
+
+/**
+ * fetchPlaylists
+ * @params user_id
+ * @params access_token
+ */
+function fetchPlaylists(access_token, user_id = 'me') {  
+  return new Promise((resolve, reject) => {
+    const path = '/user/' + user_id + '/playlists?access_token=' + access_token + '&';
+    recursiveHttps(access_token, path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
+}
+
+/**
+ * fetchPlaylist Return the artist content with its albums
+ * @params id
+ */
+function fetchPlaylist(access_token, id) {
+  return new Promise((resolve, reject) => {
+    const path = '/playlist/'+id;
+    genericHttps(access_token, path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
+}
+
+function fetchPlaylistContent(access_token, id) {
+  return new Promise((resolve, reject) => {
+    const path = '/playlist/'+id+'/tracks?';
+    recursiveHttps(access_token, path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
+}
+
+/**
+ * fetchTrack
+ * @params id
+ */
+function fetchTrack(access_token, id) {
+  return new Promise((resolve, reject) => {
+    const path = '/track/'+id;
+    genericHttps(access_token, path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
+}
+
+/**
+ * fetchFollowings
+ * @params user_id
+ * @params access_token
+ */
+function fetchFollowings(access_token, user_id) {
+  return new Promise((resolve, reject) => {
+    const path = '/user/' + user_id + '/followings?access_token=' + access_token + '&';
+    recursiveHttps(access_token, path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
+}
+
+/**
+ * fetchFollowings
+ * @params user_id
+ * @params access_token
+ */
+function fetchFollowers(access_token, user_id) {
+  return new Promise((resolve, reject) => {
+    const path = '/user/' + user_id + '/followers?access_token=' + access_token + '&';
+    recursiveHttps(access_token, path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
+}
+
+function fetchSearch(type, query, strict) {
+  return new Promise((resolve, reject) => {
+    const path = '/search/'+type+'?q='+encodeURI(query)+(strict == false ? '&sort=ranking':'');
+    genericHttps(null, path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
+}
+
+//////////////
+// SERVICES //
+//////////////
+
+/**
+ * getArtists
+ * @params user_id
+ * @params access_token
+ */
+function getArtists(access_token, user_id = 'me') {
+  return new Promise((resolve, reject) => {
+    fetchArtists(access_token, user_id)
+      .then(result => {
+        resolve(result.map(i => formatArtistToStandard(i)))
+      })
+      .catch(err => reject(err));
+  });
+}
+
+/**
  * getArtist
  * @params id
  */
-function getArtist(id) {
+function getArtist(access_token, id) {
   return new Promise((resolve, reject) => {
-    fetchArtist(id)
+    fetchArtist(access_token, id)
       .then(result => {
         resolve(formatArtistToStandard(result))
       })
@@ -219,16 +358,16 @@ function getArtist(id) {
  * getRelatedArtists
  * @params id
  */
-function getRelatedArtists(id) {
+function getRelatedArtists(access_token, id) {
   return new Promise((resolve, reject) => {
     const path = '/artist/' + id + '/related';
-    genericHttps(path)
+    genericHttps(null, path)
       .then(result => {
         return result
       })
       .then(async (relatedArtists) => {
         await Promise
-          .all(relatedArtists.data.map(i => fetchArtist(i.id)))
+          .all(relatedArtists.data.map(i => fetchArtist(null, i.id)))
           .then(results => {
             var artists = [];
             results.forEach((a) => {
@@ -248,94 +387,17 @@ function getRelatedArtists(id) {
 }
 
 /**
- * fetchAlbums
- * @params user_id
- * @params access_token
- */
-function fetchAlbums(user_id = 'me', access_token) {
-  return new Promise((resolve, reject) => {
-    const path = '/user/' + user_id + '/albums?access_token=' + access_token + '&';
-    recursiveHttps(path)
-      .then(result => {
-        resolve(result);
-      })
-      .catch(error => reject(error));
-  });
-}
-
-/**
  * getAlbums
  * @params user_id
  * @params access_token
  */
-function getAlbums(user_id = 'me', access_token) {
+function getAlbums(access_token, user_id = 'me') {
   return new Promise((resolve, reject) => {
-    fetchAlbums(user_id, access_token)
+    fetchAlbums(access_token, user_id)
       .then(result => {
         resolve(result.map(i => formatAlbumToFeed(i)))
       })
       .catch(err => reject(err));
-  });
-}
-
-/**
- * fetchAlbum
- * @params id
- */
-function fetchAlbum(id) {
-  return new Promise((resolve, reject) => {
-    const path = '/album/'+id;
-    genericHttps(path)
-      .then(result => {
-        resolve(result);
-      })
-      .catch(error => reject(error));
-  });
-}
-
-/**
- * fetchPlaylists
- * @params user_id
- * @params access_token
- */
-function fetchPlaylists(user_id = 'me', access_token) {  
-  return new Promise((resolve, reject) => {
-    const path = '/user/' + user_id + '/playlists?access_token=' + access_token + '&';
-    recursiveHttps(path)
-      .then(result => {
-        resolve(result);
-      })
-      .catch(error => reject(error));
-  });
-}
-
-/**
- * getPlaylistContent Return the artist content with its albums
- * @params id
- */
-function getPlaylistContent(id) {
-  return new Promise((resolve, reject) => {
-    const path = '/playlist/'+id;
-    genericHttps(path)
-      .then(result => {
-        resolve(result);
-      })
-      .catch(error => reject(error));
-  });
-}
-
-/**
- * fetchTrack
- * @params id
- */
-function fetchTrack(id) {
-  return new Promise((resolve, reject) => {
-    const path = '/track/'+id;
-    genericHttps(path)
-      .then(result => {
-        resolve(result);
-      })
-      .catch(error => reject(error));
   });
 }
 
@@ -349,11 +411,11 @@ async function getMyReleases(access_token) {
   var releases = [];
   var error;
 
-  const artists = await fetchArtists(user_id, access_token).catch(err => error = err);
+  const artists = await fetchArtists(access_token, 'me').catch(err => error = err);
   if(artists && artists.length > 0) {
     await Promise
       .all(artists.map(i => 
-        fetchArtist(i.id).catch(err => error = err))
+        fetchArtist(access_token, i.id).catch(err => error = err))
       )
       .then(results => {
         results.forEach((a) => {
@@ -370,7 +432,6 @@ async function getMyReleases(access_token) {
     const call = await getGenres().catch(err => error = err);
     if(call && call.length > 0) {
       availableGenres.forEach(item => {
-
         let existingGenre = call.find(g => {
           return g.id == item;
         });
@@ -382,7 +443,7 @@ async function getMyReleases(access_token) {
   }
   releases.genres = genres;
 
-  const playlists = await fetchPlaylists(user_id, access_token).catch(err => error = err);
+  const playlists = await fetchPlaylists(access_token, user_id).catch(err => error = err);
   if(playlists && playlists.length > 0) {
     playlists.forEach(p => {
       if(!p.is_loved_track && p.creator.id != user_id) {
@@ -405,20 +466,51 @@ async function getMyReleases(access_token) {
   });
 }
 
+function getPlaylistArtistRelease(access_token, id) {
+  return new Promise((resolve, reject) => {
+    fetchPlaylistContent(access_token, id)
+      .then(results => {
+        var artists = []
+        results.forEach(item => {
+          artists.push(item.artist);
+        })
+        return artists;
+      })
+      .then(async (artists) => {
+        var releases = []
+        await Promise
+          .all(artists.map(i => 
+            fetchArtist(access_token, i.id).catch(err => console.log(err)))
+          )
+          .then(results => {
+            results.forEach((a) => {
+              if (a.albums && a.albums.length > 0) {
+                releases.push(formatArtistToFeed(a));
+              }
+            })
+          }).catch(err => reject(error));
+
+        releases.sort((a,b) => sortLastReleases(a,b));
+        resolve(releases);
+      })
+      .catch(error => reject(error));
+  });
+}
+
 /**
  * getReleases
  * @params user_id
  * @params access_token
  */
-async function getReleases(user_id, access_token) {
+async function getReleases(access_token, user_id) {
   var releases = [];
   var error;
 
-  const artists = await fetchArtists(user_id, access_token).catch(err => error = err);
+  const artists = await fetchArtists(access_token, user_id).catch(err => error = err);
   if(artists && artists.length > 0) {
     await Promise
       .all(artists.map(i => 
-        fetchArtist(i.id).catch(err => error = err))
+        fetchArtist(access_token, i.id).catch(err => error = err))
       )
       .then(results => {
         results.forEach((a) => {
@@ -436,7 +528,6 @@ async function getReleases(user_id, access_token) {
     const call = await getGenres().catch(err => error = err);
     if(call && call.length > 0) {
       availableGenres.forEach(item => {
-
         let existingGenre = call.find(g => {
           return g.id == item;
         });
@@ -448,21 +539,17 @@ async function getReleases(user_id, access_token) {
   }
   releases.genres = genres;
 
-  const playlists = await fetchPlaylists(user_id, access_token).catch(err => error = err);
-
+  const playlists = await fetchPlaylists(access_token, user_id).catch(err => error = err);
   if(playlists && playlists.length > 0) {
     playlists.forEach(p => {
       releases.push(formatPlaylistToFeed(p));
     });
   }
 
-
-  const albums = await fetchAlbums(user_id, access_token).catch(err => error = err);
-
+  const albums = await fetchAlbums(access_token, user_id).catch(err => error = err);
   if(albums && albums.length > 0) {
 
     albums.forEach(a => {
-
       let existingAlbum = releases.find(r => {
         return r.content.id == a.id && r.content.type == a.record_type;
       });
@@ -492,25 +579,25 @@ async function getReleases(user_id, access_token) {
  * @params obj
  * @params id
  */
-function getReleaseContent(obj, id) {
+function getReleaseContent(access_token, obj, id) {
   return new Promise((resolve, reject) => {
     if(obj === 'album') {
       // retrieve the general content
-      const promise = fetchAlbum(id)
+      const promise = fetchAlbum(access_token, id)
         .then((response) => {
           return formatAlbumToFeed(response);
         }).catch(err => reject(err));
 
       // retrieve the related artists
       promise.then((release) => {
-        getRelatedArtists(release.author.id).then((response) => {
+        getRelatedArtists(access_token, release.author.id).then((response) => {
           release.related = response;
           release.related.sort((a,b) => sortLastReleases(a,b));
           resolve(release);
         }).catch(err => reject(err));
       }).catch(err => reject(err));
     } else if (obj === 'playlist') {
-      getPlaylistContent(id)
+      fetchPlaylist(access_token, id)
         .then((response) => {       
           resolve(formatPlaylistToFeed(response));          
         }).catch(err => reject(err));
@@ -527,7 +614,7 @@ function getReleaseContent(obj, id) {
 function getGenres() {
   return new Promise((resolve, reject) => {
     const path = '/genre';
-    genericHttps(path)
+    genericHttps(null, path)
       .then(result => {
         resolve(result.data);
       })
@@ -535,42 +622,10 @@ function getGenres() {
   });
 }
 
-/**
- * fetchFollowings
- * @params user_id
- * @params access_token
- */
-function fetchFollowings(user_id, access_token) {
-  return new Promise((resolve, reject) => {
-    const path = '/user/' + user_id + '/followings?access_token=' + access_token + '&';
-    recursiveHttps(path)
-      .then(result => {
-        resolve(result);
-      })
-      .catch(error => reject(error));
-  });
-}
-
-/**
- * fetchFollowings
- * @params user_id
- * @params access_token
- */
-function fetchFollowers(user_id, access_token) {
-  return new Promise((resolve, reject) => {
-    const path = '/user/' + user_id + '/followers?access_token=' + access_token + '&';
-    recursiveHttps(path)
-      .then(result => {
-        resolve(result);
-      })
-      .catch(error => reject(error));
-  });
-}
-
 function getMeAccount(access_token) {
   return new Promise((resolve, reject) => {
-    const path = '/user/me?access_token=' + access_token;
-    genericHttps(path)
+    const path = '/user/me';
+    genericHttps(access_token, path)
       .then(result => {
         resolve(result);
       })
@@ -601,17 +656,6 @@ function getSocialFriends(user_id, access_token) {
     });
 }
 
-function fetchSearch(type, query, strict) {
-  return new Promise((resolve, reject) => {
-    const path = '/search/'+type+'?q='+encodeURI(query)+(strict == false ? '&sort=ranking':'');
-    genericHttps(path)
-      .then(result => {
-        resolve(result);
-      })
-      .catch(error => reject(error));
-  });
-}
-
 async function getSearch(query, types = "*", strict = false) {
   const allowedTypes = ['artist', 'album', 'playlist', 'track', 'user'];
   var search_types = [];
@@ -640,30 +684,24 @@ async function getSearch(query, types = "*", strict = false) {
               results.artists = result.data.map(i => formatArtistToStandard(i));
               break;
             case 'album':
-              //Array.prototype.push.apply(results, result.data.map(i => formatAlbumToStandard(i)));
               await Promise
-                .all(result.data.map(i => fetchAlbum(i.id).catch(err => error = err)))
+                .all(result.data.map(i => fetchAlbum(null, i.id).catch(err => error = err)))
                 .then(albums => {
                   results.albums = albums.map(i => formatAlbumToStandard(i));
-                  //Array.prototype.push.apply(results, albums.map(i => formatAlbumToStandard(i)));
                 }).catch(err => error = err);
               break;
             case 'playlist':
               results.playlists = result.data.map(i => formatPlaylistToStandard(i));
-              //Array.prototype.push.apply(results, result.data.map(i => formatPlaylistToStandard(i)));
               break;
             case 'track':
-              //Array.prototype.push.apply(results, result.data.map(i => formatTrackToStandard(i)));
               await Promise
-                .all(result.data.map(i => fetchTrack(i.id).catch(err => error = err)))
+                .all(result.data.map(i => fetchTrack(null, i.id).catch(err => error = err)))
                 .then(tracks => {
                   results.tracks = tracks.map(i => formatTrackToStandard(i));
-                  //Array.prototype.push.apply(results, tracks.map(i => formatTrackToStandard(i)));                  
                 }).catch(err => error = err);
               break;
             case 'user':
               results.users = result.data.map(i => formatUserToStandard(i));
-              //Array.prototype.push.apply(results, result.data.map(i => formatUserToStandard(i)));
               break;
           }
         })
@@ -671,7 +709,6 @@ async function getSearch(query, types = "*", strict = false) {
   } else {
     error = utils.error("Bad t paramater", 400)
   }
-
 
   return new Promise((resolve, reject) => {
     if (Object.keys(results).length == 0) {
@@ -700,11 +737,11 @@ function searchAlbumUPC(query, upc) {
       const path = '/search/album?limit=' + limit + '&index=' + index + '&q='+encodeURI(query);
 
       try {
-        albums = await genericHttps(path);
+        albums = await genericHttps(null, path);
         if(albums && albums.data) {
           total = albums.total;
           try {
-            fullAlbums = await Promise.all(albums.data.map(i => fetchAlbum(i.id)));
+            fullAlbums = await Promise.all(albums.data.map(i => fetchAlbum(null, i.id)));
             //fullAlbums = await Promise.all(albums.data.filter(i => utils.checkSize(query, i.title)).map(i => fetchAlbum(i.id)));
           } finally {
             if (fullAlbums) {
@@ -754,11 +791,11 @@ function searchTrackISRC(query, isrc) {
       const path = '/search/track?limit=' + limit + '&index=' + index + '&q='+encodeURI(query);
 
       try {
-        tracks = await genericHttps(path);
+        tracks = await genericHttps(null, path);
         if(tracks && tracks.data) {
           total = tracks.total;
           try {
-            fullTracks = await Promise.all(tracks.data.map(i => fetchTrack(i.id)))
+            fullTracks = await Promise.all(tracks.data.map(i => fetchTrack(null, i.id)))
           } finally {
             if (fullTracks) {
               track = fullTracks.filter(t => t.isrc == isrc);
@@ -789,7 +826,7 @@ function searchTrackISRC(query, isrc) {
 
 function getMyPlaylists(access_token) {
   return new Promise((resolve, reject) => {
-    fetchPlaylists('me', access_token)
+    fetchPlaylists(access_token, 'me')
     .then((response) => {
       resolve(response.map(i => formatPlaylistToStandard(i)))
     }).catch(err => reject(err));
@@ -925,7 +962,7 @@ function formatArtistToFeed(artist){
       upc: artist.albums[0].upc || null,
       genre: artist.albums[0].genre_id,
       updated_at: artist.albums[0].release_date,
-      last: artist.albums[0],
+      //last: artist.albums[0],
     }
   };
 }
@@ -955,7 +992,7 @@ function formatAlbumToFeed(album) {
       genre: album.genre_id,
       updated_at: album.release_date,
       tracks: album.tracks ? album.tracks.data.map(i => formatTrackToStandard(i)) : null,
-      last: album,
+      //last: album,
     },
   };
 }
@@ -987,7 +1024,7 @@ function formatPlaylistToFeed(playlist) {
                 : playlist.tracks ? timestampToDate(Math.max.apply(null, playlist.tracks.data.map(i => i.time_add)))
                 : null, 
       tracks: playlist.tracks ? playlist.tracks.data.map(i => formatTrackToStandard(i)) : null,
-      last: playlist,
+      //last: playlist,
     },
   };
 }
@@ -1056,4 +1093,4 @@ exports.getSearch = getSearch;
 exports.searchAlbumUPC = searchAlbumUPC;
 exports.searchTrackISRC = searchTrackISRC;
 exports.getMyPlaylists = getMyPlaylists;
-
+exports.getPlaylistArtistRelease = getPlaylistArtistRelease;

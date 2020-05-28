@@ -195,6 +195,51 @@ async function fetchPlaylist(access_token, id) {
   });
 }
 
+/**
+ * getPlaylistContent Return the artist content with its albums
+ * @params id
+ */
+function fetchPlaylistContent(access_token, id) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/playlists/'+id+'/tracks?';
+    recursiveHttps(access_token, path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
+}
+
+function getPlaylistArtistRelease(access_token, id) {
+  return new Promise((resolve, reject) => {
+    fetchPlaylistContent(access_token, id)
+      .then(results => {
+        var artists = []
+        results.forEach(item => {
+          Array.prototype.push.apply(artists, item.track.artists);
+        })
+        return artists;
+      })
+      .then(async (artists) => {
+        var releases = []
+        await Promise
+          .all(artists.map(i => 
+            fetchArtist(access_token, i.id).catch(err => console.log(err)))
+          )
+          .then(results => {
+            results.forEach((a) => {
+              if (a.albums && a.albums.length > 0) {
+                releases.push(formatArtistToFeed(a));
+              }
+            })
+          }).catch(err => reject(error));
+
+        releases.sort((a,b) => sortLastReleases(a,b));
+        resolve(releases);
+      })
+      .catch(error => reject(error));
+  });
+}
 
 
 async function getSearch(access_token, query, types = "*", strict = false) {
@@ -698,7 +743,7 @@ function formatArtistToFeed(artist){
       upc: firstAlbum.upc || null,
       genre: artist.genres ? artist.genres.join(':') : '',
       updated_at: firstAlbum.release_date,
-      last: artist.albums[0],
+      //last: artist.albums[0],
     }
   };
 }
@@ -729,7 +774,7 @@ function formatAlbumToFeed(album) {
       genre: album.genres.join(':') ? mainArtist.genres.join(':') : '',
       updated_at: album.release_date,
       tracks: album.tracks ? album.tracks.items.map(i => formatTrackToStandard(i)) : null,
-      last: album,
+      //last: album,
     },
   };
 }
@@ -759,7 +804,7 @@ function formatPlaylistToFeed(playlist) {
       updated_at: playlist.tracks && playlist.tracks.items ? timestampToDate(Math.max.apply(null, playlist.tracks.items.map(i => timezoneToTimestamp(i.added_at))))
                 : null, 
       tracks: playlist.tracks && playlist.tracks.items ? playlist.tracks.items.map(i => formatTrackToStandard(i)) : null,
-      last: playlist,
+      //last: playlist,
     },
   };
 }
@@ -821,4 +866,4 @@ exports.searchTrackISRC = searchTrackISRC;
 exports.getMyReleases = getMyReleases;
 exports.getReleaseContent = getReleaseContent;
 exports.getMyPlaylists = getMyPlaylists;
-
+exports.getPlaylistArtistRelease = getPlaylistArtistRelease;

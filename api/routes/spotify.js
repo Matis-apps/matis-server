@@ -89,5 +89,15 @@ router.get('/me/playlists', (req, res, next) => {
   }).catch(err => next(err));
 });
 
+router.get('/me/playlist/:id([0-9a-zA-Z]+)/releases', (req, res, next) => {
+  const id = req.params.id;
+  spotify.getPlaylistArtistRelease(req.spotify_token, id).then(data => {
+    res.status(200).json({
+      'data': data,
+      'count': data.length,
+    })
+  }).catch(err => next(err));
+});
+
 
 module.exports = router;
