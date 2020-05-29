@@ -216,7 +216,14 @@ function getPlaylistArtistRelease(access_token, id) {
       .then(results => {
         var artists = []
         results.forEach(item => {
-          Array.prototype.push.apply(artists, item.track.artists);
+          item.track.artists.forEach(artist => {
+            let existingArtist = artists.find(e => {
+              return e.id == artist.id;
+            })
+            if (!existingArtist) {
+              artists.push(artist)
+            }
+          })
         })
         return artists;
       })
@@ -229,7 +236,13 @@ function getPlaylistArtistRelease(access_token, id) {
           .then(results => {
             results.forEach((a) => {
               if (a.albums && a.albums.length > 0) {
-                releases.push(formatArtistToFeed(a));
+                let formatedAlbum = formatArtistToFeed(a);
+                let existingArtist = releases.find(e => {
+                  return e.author.id == formatedAlbum.author.id;
+                })
+                if (!existingArtist) {
+                  releases.push(formatedAlbum);
+                }
               }
             })
           }).catch(err => reject(error));
@@ -271,22 +284,21 @@ async function getSearch(access_token, query, types = "*", strict = false) {
               results.artists = result.artists.items.map(i => formatArtistToStandard(i));
               break;
             case 'album':
-              //Array.prototype.push.apply(results, result.albums.items.map(i => formatAlbumToStandard(i)));
               await Promise
                 .all(result.albums.items.map(i => fetchAlbum(access_token, i.id).catch(err => error = err)))
                 .then(albums => {
                   results.albums = albums.map(i => formatAlbumToStandard(i));
-                }).catch(err => error = err);
+                })
+                .catch(err => error = err);
               break;
             case 'playlist':
               results.playlists = result.playlists.items.map(i => formatPlaylistToStandard(i));
               break;
             case 'track':
-              //Array.prototype.push.apply(results, result.tracks.items.map(i => formatTrackToStandard(i)));
               await Promise
                 .all(result.tracks.items.map(i => fetchTrack(access_token, i.id).catch(err => error = err)))
                 .then(tracks => {
-                  results.tracks =  tracks.map(i => formatTrackToStandard(i));
+                  results.tracks = tracks.map(i => formatTrackToStandard(i));
                 }).catch(err => error = err);
               break;
           }
@@ -450,6 +462,17 @@ async function getMyReleases(access_token) {
       key: ++key,
       value: i,
     }))
+
+    releases.forEach(i => {
+      var formated = [];
+      i.content.genre.split(':').forEach(g => {
+        let existingGenre = genres.find(e => {
+          return g == e.value
+        })
+        formated.push(existingGenre.key)
+      })
+      i.content.genre = formated.join(':');
+    })
   }
   releases.genres = genres;
 
@@ -800,7 +823,7 @@ function formatPlaylistToFeed(playlist) {
       type: playlist.type,
       picture: playlist.images && playlist.images.length > 0 ? playlist.images[0].url : null,
       link: playlist.external_urls.spotify,
-      genre: null,
+      genre: '',
       updated_at: playlist.tracks && playlist.tracks.items ? timestampToDate(Math.max.apply(null, playlist.tracks.items.map(i => timezoneToTimestamp(i.added_at))))
                 : null, 
       tracks: playlist.tracks && playlist.tracks.items ? playlist.tracks.items.map(i => formatTrackToStandard(i)) : null,
@@ -857,6 +880,10 @@ function timezoneToTimestamp(timezone) {
 
 function timestampToDate(timestamp) {
   return moment1.unix(timestamp).format("YYYY-MM-DD");
+}
+
+function timestampToTime(seconds) {
+  return moment1.unix(seconds).format("mm:ss");
 }
 
 exports.getMeAccount = getMeAccount;

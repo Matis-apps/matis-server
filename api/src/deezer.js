@@ -442,7 +442,7 @@ async function getMyReleases(access_token) {
     }
   }
   releases.genres = genres;
-
+  console.log(releases.genres)
   const playlists = await fetchPlaylists(access_token, user_id).catch(err => error = err);
   if(playlists && playlists.length > 0) {
     playlists.forEach(p => {
@@ -472,7 +472,13 @@ function getPlaylistArtistRelease(access_token, id) {
       .then(results => {
         var artists = []
         results.forEach(item => {
-          artists.push(item.artist);
+          let artist = item.artist;
+          existingArtist = artists.find(e => {
+            return e.id == artist.id;
+          })
+          if (!existingArtist) {
+            artists.push(artist)
+          }
         })
         return artists;
       })
