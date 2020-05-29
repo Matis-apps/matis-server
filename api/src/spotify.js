@@ -5,7 +5,7 @@ const moment2 = require('moment-timezone');
 const utils = require('../../utils');
 
 const call_limit = 50; // Limit of items to retrieve
-const retry_limit = 8; // Limit number of retry
+const retry_limit = 10; // Limit number of retry
 const retry_timeout = 1800; // Limit number of retry
 
 /**
@@ -26,14 +26,19 @@ const httpsCall = async function(options) {
           if (response.statusCode === 200) {
             if (!json) { // json is undefined or null
               reject(utils.error("Unvalid json", 500));
-            } else if (json.error) { // json has an error (set by Deezer)
+            } else if (json.error) { // json has an error
               reject(utils.error(json.error.message, json.error.code));
             } else { // otherwise, json is ok
               resolve(json)
             }
           } else {
             if(json.error) {
-              reject(utils.error(json.error.message, response.statusCode));
+              if (response.statusCode == 429 && response.headers['retry-after']) {
+                let retry_after = response.headers['retry-after'] ? response.headers['retry-after']*1000 : retry_timeout;
+                reject(utils.error(retry_after, response.statusCode));
+              } else {
+                reject(utils.error(json.error.message, response.statusCode));
+              }
             } else {
               reject(utils.error("Something went wrong...", 500));
             }
@@ -70,7 +75,7 @@ function genericHttps(access_token, path) {
         result = await httpsCall(options) // await for the response
       } catch(err) {
         error = err;
-        if(error.code == 429) retry-- && await sleep(retry_timeout);// code 4 == quota limit
+        if(error.code == 429) retry-- && await sleep(error.message);// code 4 == quota limit
         else retry = 0;
       }
     } while (!result && retry > 0); // loop while there is another page
@@ -131,7 +136,7 @@ function recursiveHttps(access_token, path) {
         }
       } catch(error) {
         if (retry > 0 && error.code == 429) { // too many request and still have a retry, so wait for a delay and get back
-          setTimeout(recursive, retry_timeout, index, retry-1);
+          setTimeout(recursive, error.message, index, retry-1);
         } else {
           reject(utils.error(error.message || "Something went wrong...", error.code || 500));
         }
@@ -142,19 +147,9 @@ function recursiveHttps(access_token, path) {
   })
 }
 
-async function getMeAccount(access_token) {
-  return new Promise((resolve, reject) => {
-    const path = '/v1/me';
-    genericHttps(access_token, path)
-      .then(result => {
-        resolve(result)
-      })
-      .catch(error => {
-        reject(error)
-      })
-  });
-}
-
+////////////////
+// FETCH DATA //
+////////////////
 async function fetchSearch(access_token, type, query, strict) {
   return new Promise((resolve, reject) => {
     const path = '/v1/search?type='+type+'&q='+encodeURI(query);
@@ -207,6 +202,111 @@ function fetchPlaylistContent(access_token, id) {
         resolve(result);
       })
       .catch(error => reject(error));
+  });
+}
+
+/**
+ * fetchArtists
+ * @params user_id
+ * @params access_token
+ */
+function fetchArtists(access_token) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/me/following?type=artist&';
+    recursiveHttps(access_token, path)
+      .then(result => {
+        resolve(result)
+      })
+      .catch(error => reject(error));
+  });
+}
+
+/**
+ * fetchArtist
+ * @params id
+ */
+function fetchArtist(access_token, id) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/artists/' + id;
+    genericHttps(access_token, path)
+      .then(result => {
+        return result
+      })
+      .then(async (artist) => {
+        await fetchArtistAlbums(access_token, id) // await for the response
+          .then(artistAlbums => {
+            artist.albums = artistAlbums.sort((a,b) => sortAlbums(a,b));
+            resolve(artist);
+          });
+      })
+      .catch(error => {
+        reject(error)
+      });
+  });
+}
+
+/**
+ * fetchArtistAlbums
+ * @params artist_id
+ * @params access_token
+ */
+function fetchArtistAlbums(access_token, artist_id) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/artists/' + artist_id + '/albums?';
+    recursiveHttps(access_token, path)
+      .then(artistAlbums => {
+        resolve(artistAlbums);
+      })
+      .catch(error => {
+        reject(error)
+      });
+  });
+}
+
+
+/**
+ * fetchAlbum
+ * @params id
+ */
+function fetchAlbum(access_token, id) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/albums/'+id;
+    genericHttps(access_token, path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
+}
+
+/**
+ * fetchTrack
+ * @params id
+ */
+function fetchTrack(access_token, id) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/tracks/'+id;
+    genericHttps(access_token, path)
+      .then(result => {
+        resolve(result);
+      })
+      .catch(error => reject(error));
+  });
+}
+
+//////////////
+// SERVICES //
+//////////////
+async function getMeAccount(access_token) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/me';
+    genericHttps(access_token, path)
+      .then(result => {
+        resolve(result)
+      })
+      .catch(error => {
+        reject(error)
+      })
   });
 }
 
@@ -335,8 +435,7 @@ function searchAlbumUPC(access_token, query, upc) {
     var albums, fullAlbums;
     do {
       albums = fullAlbums = null;
-      const path = '/v1/search?type=album&limit=' + limit + '&offset=' + index + '&q=' + encodeURI(query);
-
+      const path = '/v1/search?type=album&limit=' + limit + '&offset=' + index + '&q=' + encodeURIComponent(utils.removeParentheses(query));
       try {
         albums = await genericHttps(access_token, path);
         if(albums && albums.albums && albums.albums.items) {
@@ -346,8 +445,8 @@ function searchAlbumUPC(access_token, query, upc) {
             // fullAlbums = await Promise.all(albums.albums.items.filter(i => utils.checkSize(query, i.name)).map(i => fetchAlbum(access_token, i.id)));
           } finally {
             if (fullAlbums) {
-              album = fullAlbums.filter(a => a.external_ids.upc == upc);
-              album = album[0] ? formatAlbumToStandard(album[0]) : null;
+              album = fullAlbums.find(a => utils.isSameUPC(a.external_ids.upc, upc));
+              album = album ? formatAlbumToStandard(album) : null;
             } else {
               throw utils.error("Invalid data", 500)
             }
@@ -544,95 +643,6 @@ function getMyPlaylists(access_token) {
     .then((response) => {
       resolve(response.map(i => formatPlaylistToStandard(i)))
     }).catch(err => reject(err));
-  });
-}
-
-/**
- * fetchArtists
- * @params user_id
- * @params access_token
- */
-function fetchArtists(access_token) {
-  return new Promise((resolve, reject) => {
-    const path = '/v1/me/following?type=artist&';
-    recursiveHttps(access_token, path)
-      .then(result => {
-        resolve(result)
-      })
-      .catch(error => reject(error));
-  });
-}
-
-/**
- * fetchArtist
- * @params id
- */
-function fetchArtist(access_token, id) {
-  return new Promise((resolve, reject) => {
-    const path = '/v1/artists/' + id;
-    genericHttps(access_token, path)
-      .then(result => {
-        return result
-      })
-      .then(async (artist) => {
-        await fetchArtistAlbums(access_token, id) // await for the response
-          .then(artistAlbums => {
-            artist.albums = artistAlbums.sort((a,b) => sortAlbums(a,b));
-            resolve(artist);
-          });
-      })
-      .catch(error => {
-        reject(error)
-      });
-  });
-}
-
-/**
- * fetchArtistAlbums
- * @params artist_id
- * @params access_token
- */
-function fetchArtistAlbums(access_token, artist_id) {
-  return new Promise((resolve, reject) => {
-    const path = '/v1/artists/' + artist_id + '/albums?';
-    recursiveHttps(access_token, path)
-      .then(artistAlbums => {
-        resolve(artistAlbums);
-      })
-      .catch(error => {
-        reject(error)
-      });
-  });
-}
-
-
-/**
- * fetchAlbum
- * @params id
- */
-function fetchAlbum(access_token, id) {
-  return new Promise((resolve, reject) => {
-    const path = '/v1/albums/'+id;
-    genericHttps(access_token, path)
-      .then(result => {
-        resolve(result);
-      })
-      .catch(error => reject(error));
-  });
-}
-
-/**
- * fetchTrack
- * @params id
- */
-function fetchTrack(access_token, id) {
-  return new Promise((resolve, reject) => {
-    const path = '/v1/tracks/'+id;
-    genericHttps(access_token, path)
-      .then(result => {
-        resolve(result);
-      })
-      .catch(error => reject(error));
   });
 }
 

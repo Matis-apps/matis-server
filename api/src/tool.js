@@ -131,19 +131,9 @@ function unifySearch(result) {
       let albums1 = result[plateform1].albums;
       let tracks1 = result[plateform1].tracks;
 
-      console.log("===========================")
-      console.log(plateform1)
-      console.log(albums1.length + " albums")
-      console.log(tracks1.length + " tracks")
-
       Object.keys(result).filter(item => item != plateform1).forEach(plateform2 => {
         // Match albums
         let albums2 = result[plateform2].albums;
-
-      console.log(plateform1)
-      console.log(albums2.length + " albums")
-
-
         if (albums1 && albums2) {
           var [albums, remains] = matchAlbums(albums1, albums2);
           Array.prototype.push.apply(matchedAlbums, albums);
@@ -152,10 +142,6 @@ function unifySearch(result) {
   
         // Match tracks
         let tracks2 = result[plateform2].tracks;
-      console.log(tracks2.length + " tracks")
-      console.log()
-
-
         if (tracks1 && tracks2) {
           var [tracks, remains] = matchTracks(tracks1, tracks2);
           Array.prototype.push.apply(matchedTracks, tracks);
@@ -219,24 +205,12 @@ function matchAlbums(albums1, albums2) {
     matched.push(i1);
     for(let i = 0; i < albums2.length; i++) {
       let i2 = albums2[i];
-      if (i1.upc == i2.upc) {
+      if (utils.isSameUPC(i1.upc, i2.upc)) {
         matched.push(i2);
         break;
       } else if (i1.name == i2.name && i1.updated_at == i2.updated_at) {
         matched.push(i2);
         break;
-      } else {
-
-        const regex = new RegExp('^0+');
-        var shortI1 = i1.upc.replace(regex,'');
-        var shortI2 = i2.upc.replace(regex,'');
-        if(shortI1 == i2.upc || i1.upc == shortI2 || shortI1 == shortI2) {
-          matched.push(i2);
-          break;
-        } else if (shortI1.substring(0,10) == i2.upc.substring(0,10) || i1.upc.substring(0,10) == shortI2.substring(0,10) || shortI1.substring(0,10) == shortI2.substring(0,10)) {
-          matched.push(i2);
-          break;
-        }
       }
     }
     albums.push(matched);

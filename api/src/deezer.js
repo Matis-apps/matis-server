@@ -442,7 +442,6 @@ async function getMyReleases(access_token) {
     }
   }
   releases.genres = genres;
-  console.log(releases.genres)
   const playlists = await fetchPlaylists(access_token, user_id).catch(err => error = err);
   if(playlists && playlists.length > 0) {
     playlists.forEach(p => {
@@ -740,8 +739,7 @@ function searchAlbumUPC(query, upc) {
     var albums, fullAlbums;
     do {
       albums = fullAlbums = null;
-      const path = '/search/album?limit=' + limit + '&index=' + index + '&q='+encodeURI(query);
-
+      const path = '/search/album?limit=' + limit + '&index=' + index + '&q='+encodeURIComponent(utils.removeParentheses(query));
       try {
         albums = await genericHttps(null, path);
         if(albums && albums.data) {
@@ -751,12 +749,8 @@ function searchAlbumUPC(query, upc) {
             //fullAlbums = await Promise.all(albums.data.filter(i => utils.checkSize(query, i.title)).map(i => fetchAlbum(i.id)));
           } finally {
             if (fullAlbums) {
-              album = fullAlbums.filter(a => a.upc == upc);
-              album = album[0] ? formatAlbumToStandard(album[0]) : null;
-              if(!album) {
-                album = fullAlbums.filter(a => a.upc.substr(0,8) == upc.substr(0,8));
-                album = album[0] ? formatAlbumToStandard(album[0]) : null;
-              }
+              album = fullAlbums.find(a => utils.isSameUPC(a.upc, upc));
+              album = album ? formatAlbumToStandard(album) : null;
             } else {
               throw utils.error("Invalid data", 500)
             }

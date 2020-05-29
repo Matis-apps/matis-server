@@ -51,6 +51,11 @@ function capitalize (string) {
   return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
+function removeParentheses(string) {
+  if (typeof string !== 'string') return '';
+  return string.replace(/\([^()]*\)/g, '');
+}
+
 /**
  * 
  * @param {*} password - The plain text password
@@ -117,10 +122,26 @@ function checkSize(one, two, accepted_diff = 200) {
   return diff < accepted_diff;
 }
 
+function isSameUPC(upc1, upc2) {
+  console.log("2")
+  console.log(upc1, upc2)
+
+  const regex = new RegExp('^0+');
+  var shortI1 = upc1.replace(regex,'');
+  var shortI2 = upc2.replace(regex,'');
+
+  let ruokay = (upc1 == upc2)
+            || (shortI1 == upc2 || upc1 == shortI2 || shortI1 == shortI2)
+            || (shortI1.substring(0,10) == upc2.substring(0,10) || upc1.substring(0,10) == shortI2.substring(0,10) || shortI1.substring(0,10) == shortI2.substring(0,10));
+  return ruokay;
+}
+
 exports.error = error;
 exports.asyncForEach = asyncForEach;
 exports.capitalize = capitalize;
+exports.removeParentheses = removeParentheses;
 exports.validPassword = validPassword;
 exports.genPassword = genPassword;
 exports.issueJWT = issueJWT;
 exports.checkSize = checkSize;
+exports.isSameUPC = isSameUPC;
