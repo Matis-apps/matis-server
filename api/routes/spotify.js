@@ -31,7 +31,6 @@ router.get('/releases/:friend_id', (req, res, next) => {
 router.get('/release/:obj([a-z]+)/:id([0-9a-zA-Z]+)', (req, res, next) => {
   const obj = req.params.obj;
   const id = req.params.id;
-  console.log("ok")
   spotify.getReleaseContent(req.spotify_token, obj, id).then(data => {
     res.status(200).json({
       'data': data,
@@ -40,17 +39,16 @@ router.get('/release/:obj([a-z]+)/:id([0-9a-zA-Z]+)', (req, res, next) => {
 });
 
 
-/*
+
 router.get('/artist/:artist_id/related', (req, res, next) => {
   const id = req.params.artist_id;
-  spotify.getRelatedArtists(id).then(data => {
+  spotify.getRelatedArtists(req.spotify_token, id).then(data => {
     res.status(200).json({
       'data': data,
       'count': data.length,
     })
   }).catch(err => next(err));
 });
-*/
 
 /*
 router.get('/me/social', (req, res, next) => {

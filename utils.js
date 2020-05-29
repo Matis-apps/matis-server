@@ -123,9 +123,6 @@ function checkSize(one, two, accepted_diff = 200) {
 }
 
 function isSameUPC(upc1, upc2) {
-  console.log("2")
-  console.log(upc1, upc2)
-
   const regex = new RegExp('^0+');
   var shortI1 = upc1.replace(regex,'');
   var shortI2 = upc2.replace(regex,'');

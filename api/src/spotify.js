@@ -263,6 +263,37 @@ function fetchArtistAlbums(access_token, artist_id) {
   });
 }
 
+/**
+ * getRelatedArtists
+ * @params id
+ */
+function getRelatedArtists(access_token, id) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/artists/' + id + '/related-artists';
+    genericHttps(access_token, path)
+      .then(result => {
+        return result
+      })
+      .then(async (relatedArtists) => {
+        await Promise
+          .all(relatedArtists.artists.map(i => fetchArtist(access_token, i.id)))
+          .then(results => {
+            var artists = [];
+            results.forEach((a) => {
+              if (a.albums && a.albums.length > 0) {            
+                artists.push(formatArtistToFeed(a));
+              }
+            })
+            return artists;
+          })
+          .then(relatedArtistsFormated =>  {
+            resolve(relatedArtistsFormated);
+          })
+          .catch(error => reject(error));
+      })
+      .catch(error => reject(error));
+  });
+}
 
 /**
  * fetchAlbum
@@ -615,23 +646,13 @@ function getReleaseContent(access_token, obj, id) {
       const promise = fetchAlbum(access_token, id)
         .then((response) => {
           resolve(formatAlbumToFeed(response));
-          //return formatAlbumToFeed(response);
         }).catch(err => reject(err));
-
-      // retrieve the related artists
-      promise.then((release) => {
-        getRelatedArtists(access_token, release.author.id).then((response) => {
-          release.related = response;
-          release.related.sort((a,b) => sortLastReleases(a,b));
-          resolve(release);
-        }).catch(err => reject(err));
-      }).catch(err => reject(err));
-    } /*else if (obj === 'playlist') {
-      getPlaylistContent(id)
-        .then((response) => {       
+    } else if (obj === 'playlist') {
+      fetchPlaylist(access_token, id)
+        .then((response) => {
           resolve(formatPlaylistToFeed(response));          
         }).catch(err => reject(err));
-    }*/ else {
+    } else {
       reject(utils.error('No content', 404))
     }
   });
@@ -756,12 +777,13 @@ function formatArtistToFeed(artist){
   return {
     _obj: 'album',
     _from: 'spotify',
-    _uid: 'deezer-'+firstAlbum.album_type+'-'+artist.id+'-'+artist.albums[0].id,
+    _uid: 'spotify-'+firstAlbum.album_type+'-'+artist.id+'-'+artist.albums[0].id,
     // Related to the author
     author: {
       id: firstArtistAlbum.id,
       name: firstArtistAlbum.name,
-      picture: firstArtistAlbum.images && firstArtistAlbum.images.length > 0 ? firstArtistAlbum.images[0].url : null,
+      picture: 
+      firstArtistAlbum.images && firstArtistAlbum.images.length > 0 ? firstArtistAlbum.images[0].url : firstAlbum.images[0] ? firstAlbum.images[0].url : null,
       link: firstArtistAlbum.external_urls.spotify ? firstArtistAlbum.external_urls.spotify :  "https://open.spotify.com/artist/"+artist.id,
       added_at: null,
     },
@@ -786,7 +808,7 @@ function formatAlbumToFeed(album) {
   return {
     _obj: 'album',
     _from: 'spotify',
-    _uid: 'deezer-'+album.album_type+'-'+mainArtist.id+'-'+album.id,
+    _uid: 'spotify-'+album.album_type+'-'+mainArtist.id+'-'+album.id,
     // Related to the author
     author: {
       id: mainArtist.id,
@@ -904,3 +926,4 @@ exports.getMyReleases = getMyReleases;
 exports.getReleaseContent = getReleaseContent;
 exports.getMyPlaylists = getMyPlaylists;
 exports.getPlaylistArtistRelease = getPlaylistArtistRelease;
+exports.getRelatedArtists = getRelatedArtists;

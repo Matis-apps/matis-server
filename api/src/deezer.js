@@ -375,6 +375,7 @@ function getRelatedArtists(access_token, id) {
                 artists.push(formatArtistToFeed(a));
               }
             })
+            artists.sort((a,b) => sortLastReleases(a,b));
             return artists;
           })
           .then(relatedArtistsFormated =>  {
@@ -590,17 +591,8 @@ function getReleaseContent(access_token, obj, id) {
       // retrieve the general content
       const promise = fetchAlbum(access_token, id)
         .then((response) => {
-          return formatAlbumToFeed(response);
+          resolve(formatAlbumToFeed(response));
         }).catch(err => reject(err));
-
-      // retrieve the related artists
-      promise.then((release) => {
-        getRelatedArtists(access_token, release.author.id).then((response) => {
-          release.related = response;
-          release.related.sort((a,b) => sortLastReleases(a,b));
-          resolve(release);
-        }).catch(err => reject(err));
-      }).catch(err => reject(err));
     } else if (obj === 'playlist') {
       fetchPlaylist(access_token, id)
         .then((response) => {       
