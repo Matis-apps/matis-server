@@ -98,7 +98,7 @@ function genPassword(password) {
 function issueJWT(user) {
   const _id = user._id;
 
-  const expiresIn = '1d';
+  const expiresIn = '15m';
 
   const payload = {
     sub: _id,

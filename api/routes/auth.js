@@ -18,4 +18,12 @@ router.post('/register', (req, res, next) => {
   }).catch(err => next(err));
 });
 
+router.post('/token', (req, res, next) => {
+  auth.token(req).then(data => {
+    res.status(200).json({
+      data,
+    })
+  }).catch(err => next(err));
+});
+
 module.exports = router;
