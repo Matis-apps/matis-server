@@ -4,7 +4,7 @@ const cors = require('cors');
 const passport = require('passport');
 const utils = require('./utils');
 const morgan = require('morgan');
-
+const cookieParser = require('cookie-parser');
 
 // Database
 require('./config/database');
@@ -25,6 +25,9 @@ app.use(morgan('dev'));
 // Allow CORS from this endpoint
 app.use(cors());
 
+// 
+app.use(cookieParser());
+
 // Routes
 const authRoutes = require('./api/routes/auth')
 const usersRoutes = require('./api/routes/users')
@@ -33,12 +36,13 @@ const spotifyRoutes = require('./api/routes/spotify')
 const toolRoutes = require('./api/routes/tool')
 
 const passportMiddleware = passport.authenticate('jwt', {session: false});
+const refreshTokenMiddleware = require('./api/middleware/addRefreshToken').addRefreshToken;
 
 app.use('/auth', authRoutes);
-app.use('/users', passportMiddleware, usersRoutes);
-app.use('/tool', passportMiddleware, toolRoutes);
-app.use('/deezer', passportMiddleware, require('./api/middleware/isDeezer').isDeezer, deezerRoutes);
-app.use('/spotify', passportMiddleware, require('./api/middleware/isSpotify').isSpotify, spotifyRoutes);
+app.use('/users', passportMiddleware, refreshTokenMiddleware, usersRoutes);
+app.use('/tool', passportMiddleware, refreshTokenMiddleware, toolRoutes);
+app.use('/deezer', passportMiddleware, refreshTokenMiddleware, require('./api/middleware/isDeezer').isDeezer, deezerRoutes);
+app.use('/spotify', passportMiddleware, refreshTokenMiddleware, require('./api/middleware/isSpotify').isSpotify, spotifyRoutes);
 
 // No route found, return an error
 app.use((req, res, next) => {
