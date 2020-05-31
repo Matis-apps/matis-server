@@ -98,18 +98,21 @@ function genPassword(password) {
 function issueJWT(user) {
   const _id = user._id;
 
-  const expiresIn = '15m';
+  const accessTokenExpiresIn = 60 * 15;
+  const refreshTokenexpiresIn = 60 * 60 * 24 * 14;
 
   const payload = {
     sub: _id,
-    iat: Date.now()
+    iat: Math.floor(Date.now() / 1000) + accessTokenExpiresIn
   };
 
-  const signedToken = jsonwebtoken.sign(payload, PRIV_KEY, { expiresIn: expiresIn, algorithm: 'RS256' });
+  const signedAccessToken = jsonwebtoken.sign(payload, PRIV_KEY, { expiresIn: accessTokenExpiresIn, algorithm: 'RS256' });
+  const signedRefreshToken = jsonwebtoken.sign(payload, PRIV_KEY, { expiresIn: refreshTokenexpiresIn, algorithm: 'RS256' });
 
   return {
-    token: "Bearer " + signedToken,
-    expires: expiresIn
+    access_token: signedAccessToken,
+    refresh_token: signedRefreshToken,
+    expires: accessTokenExpiresIn,
   }
 }
 

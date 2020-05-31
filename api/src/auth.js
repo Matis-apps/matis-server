@@ -1,6 +1,7 @@
 const utils = require('../../utils');
 const User = require('mongoose').model('User');
-var randtoken = require('rand-token') 
+var randtoken = require('rand-token');
+var cookieParser = require('cookie-parser');
 
 function login(req) {
   return new Promise( async (resolve, reject) => {
@@ -13,7 +14,6 @@ function login(req) {
         if (!user) {
           reject(utils.error("Could not find the user", 403))
         } else {
-          // Function defined at bottom of app.js
           const isValid = utils.validPassword(req.body.password, user.hash, user.salt);
           if (isValid) {
             const jwt = utils.issueJWT(user);
@@ -43,14 +43,11 @@ function register(req) {
         if(findUser) {
           reject(utils.error("User already exists", 401))
         } else {
-          var generatedRefreshToken = randtoken.uid(256) 
-          
           const newUser = new User({
             name: req.body.name,
             email: req.body.email,
             hash: hash,
             salt: salt,
-            refresh_token: generatedRefreshToken,
             register_date: new Date(),
           });
 
@@ -58,9 +55,6 @@ function register(req) {
             newUser.save()
               .then((user) => {
                 const jwt = utils.issueJWT(user);
-                const access_token = jwt.token;
-                const expires = jwt.expires;
-                const refresh_token = user.refresh_token;
                 resolve(formatResponse(jwt, user))
               });
           } catch (error) {
@@ -76,12 +70,12 @@ function register(req) {
 
 function token(req) {
   return new Promise( async (resolve, reject) => {
-    if (!req.body.refresh_token) {
+    let refresh_token = req.cookies.refresh_token;
+    if (!refresh_token) {
       reject(utils.error("Missing parameters", 400))
     } else {
-      var refresh_token = req.body.refresh_token;
       try {
-        const findUser = await User.findOne({ refresh_token: req.body.refresh_token });
+        const findUser = await User.findOne({ refresh_token: refresh_token });
         if (!findUser) {
           reject(utils.error("Could not find the user", 403))
         } else {
@@ -96,11 +90,17 @@ function token(req) {
 }
 
 function formatResponse(jwt, user) {
-  const access_token = jwt.token;
+  const access_token = jwt.access_token;
+  const refresh_token = jwt.refresh_token;
   const expires = jwt.expires;
-  const refresh_token = user.refresh_token;
-
-  return { access_token, refresh_token, expires };
+  var has = [];
+  if (user.deezer) {
+    has.push('Deezer');
+  }
+  if (user.spotify) {
+    has.push('Spotify');
+  }
+  return { has, access_token, refresh_token, expires };
 }
 
 exports.login = login;
