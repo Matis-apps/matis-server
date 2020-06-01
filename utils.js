@@ -95,25 +95,24 @@ function genPassword(password) {
  * @param {*} user - The user object.  
  * We need this to set the JWT `sub` payload property to the MongoDB user ID
  */
-function issueJWT(user) {
-  const _id = user._id;
-
-  const accessTokenExpiresIn = 60 * 15;
-  const refreshTokenexpiresIn = 60 * 60 * 24 * 14;
-
+ function issueJWT(user, expires) {
   const payload = {
-    sub: _id,
-    iat: Math.floor(Date.now() / 1000) + accessTokenExpiresIn
+    sub: user._id,
+    iat: Math.floor(Date.now() / 1000),
   };
 
-  const signedAccessToken = jsonwebtoken.sign(payload, PRIV_KEY, { expiresIn: accessTokenExpiresIn, algorithm: 'RS256' });
-  const signedRefreshToken = jsonwebtoken.sign(payload, PRIV_KEY, { expiresIn: refreshTokenexpiresIn, algorithm: 'RS256' });
-
   return {
-    access_token: signedAccessToken,
-    refresh_token: signedRefreshToken,
-    expires: accessTokenExpiresIn,
-  }
+    token: jsonwebtoken.sign(payload, PRIV_KEY, { algorithm: 'RS256', expiresIn: expires }),
+    expires: expires,
+  };
+}
+
+function issueJWTAccessToken(user) {
+  return issueJWT(user, 60 * 15);
+}
+
+function issueJWTRefreshToken(user) {
+  return issueJWT(user, 60 * 15 * 24 * 14);
 }
 
 
@@ -142,6 +141,7 @@ exports.capitalize = capitalize;
 exports.removeParentheses = removeParentheses;
 exports.validPassword = validPassword;
 exports.genPassword = genPassword;
-exports.issueJWT = issueJWT;
+exports.issueJWTAccessToken = issueJWTAccessToken;
+exports.issueJWTRefreshToken = issueJWTRefreshToken;
 exports.checkSize = checkSize;
 exports.isSameUPC = isSameUPC;

@@ -1,7 +1,8 @@
 const express = require('express');
 const app = express();
 const cors = require('cors');
-const passport = require('passport');
+const passport_access = require('passport');
+const passport_refresh = require('passport');
 const utils = require('./utils');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
@@ -11,10 +12,12 @@ require('./config/database');
 require('./models/user');
 
 // Pass the global passport object into the configuration function
-require('./config/passport')(passport);
+require('./config/passport')(passport_access);
+require('./config/passport-refresh')(passport_refresh);
 
 // This will initialize the passport object on every request
-app.use(passport.initialize());
+app.use(passport_access.initialize());
+app.use(passport_refresh.initialize());
 
 // Parse JSON bodies (as sent by API clients)
 app.use(express.json());
@@ -23,9 +26,12 @@ app.use(express.json());
 app.use(morgan('dev'));
 
 // Allow CORS from this endpoint
-app.use(cors());
+app.use(cors({
+  origin: process.env.APP_URL,
+  credentials: true
+}));
 
-// 
+// Ease to parse cookies
 app.use(cookieParser());
 
 // Routes
@@ -35,7 +41,7 @@ const deezerRoutes = require('./api/routes/deezer')
 const spotifyRoutes = require('./api/routes/spotify')
 const toolRoutes = require('./api/routes/tool')
 
-const passportMiddleware = passport.authenticate('jwt', {session: false});
+const passportMiddleware = passport_access.authenticate('jwt_access_token', {session: false});
 const refreshTokenMiddleware = require('./api/middleware/addRefreshToken').addRefreshToken;
 
 app.use('/auth', authRoutes);

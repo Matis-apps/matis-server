@@ -16,8 +16,7 @@ function login(req) {
         } else {
           const isValid = utils.validPassword(req.body.password, user.hash, user.salt);
           if (isValid) {
-            const jwt = utils.issueJWT(user);
-            resolve(formatResponse(jwt, user))
+            resolve(formatUserAuth(user));
           } else {
             reject(utils.error("Wrong password", 401))
           }
@@ -54,8 +53,7 @@ function register(req) {
           try {
             newUser.save()
               .then((user) => {
-                const jwt = utils.issueJWT(user);
-                resolve(formatResponse(jwt, user))
+                resolve(formatUserAuth(user));
               });
           } catch (error) {
             reject(utils.error(error, 500))
@@ -68,31 +66,28 @@ function register(req) {
   })
 }
 
-function token(req) {
+function token(req, refresh_token) {
   return new Promise( async (resolve, reject) => {
-    let refresh_token = req.cookies.refresh_token;
     if (!refresh_token) {
       reject(utils.error("Missing parameters", 400))
     } else {
-      try {
-        const findUser = await User.findOne({ refresh_token: refresh_token });
-        if (!findUser) {
-          reject(utils.error("Could not find the user", 403))
-        } else {
-          const jwt = utils.issueJWT(findUser);
-          resolve(formatResponse(jwt, findUser));
+      let user = req.user;
+      if (!user) {
+        reject(utils.error("No user found", 400))
+      } else {
+        try {
+          resolve(formatUserAuth(user));
+        } catch (error) {
+          reject(utils.error(error, 500))
         }
-      } catch (error) {
-        reject(utils.error(error, 500))
       }
     }
   })
 }
 
-function formatResponse(jwt, user) {
-  const access_token = jwt.access_token;
-  const refresh_token = jwt.refresh_token;
-  const expires = jwt.expires;
+function formatUserAuth(user) {
+  const access_token = utils.issueJWTAccessToken(user);
+  const refresh_token = utils.issueJWTRefreshToken(user);
   var has = [];
   if (user.deezer) {
     has.push('Deezer');
@@ -100,7 +95,7 @@ function formatResponse(jwt, user) {
   if (user.spotify) {
     has.push('Spotify');
   }
-  return { has, access_token, refresh_token, expires };
+  return { access_token, refresh_token, has };
 }
 
 exports.login = login;
