@@ -24,28 +24,29 @@ function httpsCall(options) {
           try {
             let json = JSON.parse(responseBody)
             if (!json) { // json is undefined or null
-              reject(utils.error("Unvalid json", 500));
+              reject(utils.error("Deezer : Unvalid json", 500));
             } else if (json.error) { // json has an error (set by Deezer)
               let code = json.error.code == 4 ? 429
                        : json.error.code == 200 ? 403
-                       : json.error.code == 300 ? 401
+                       : json.error.code == 300 ? 403 // Maybe not the best practice, but says that the access is forbidden as the token expired
                        : json.error.code == 500 || json.error.code == 501 || json.error.code == 600 ? 400
                        : json.error.code == 700 ? 503
                        : json.error.code == 800 ? 404
                        : json.error.code;
-              reject(utils.error(json.error.message, code));
+
+              reject(utils.error("Deezer : " + json.error.message, code));
             } else { // otherwise, json is ok
               resolve(json)
             }
           } catch(err) {
-            reject(utils.error(err.message, 500));
+            reject(utils.error("Deezer : " + err.message, 500));
           }
         } else {
-          reject(utils.error(response, response.statusCode));
+          reject(utils.error("Deezer : " + response, response.statusCode));
         }
       })
     })
-    .on('error', (err) => reject(utils.error(err.message, 500)));
+    .on('error', (err) => reject(utils.error("Deezer : " + err.message, 500)));
   })
 }
 

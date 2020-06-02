@@ -25,9 +25,9 @@ const httpsCall = async function(options) {
           let json = JSON.parse(responseBody)
           if (response.statusCode === 200) {
             if (!json) { // json is undefined or null
-              reject(utils.error("Unvalid json", 500));
+              reject(utils.error("Spotify : Unvalid json", 500));
             } else if (json.error) { // json has an error
-              reject(utils.error(json.error.message, json.error.code));
+              reject(utils.error("Spotify : " + json.error.message, json.error.code));
             } else { // otherwise, json is ok
               resolve(json)
             }
@@ -37,18 +37,18 @@ const httpsCall = async function(options) {
                 let retry_after = response.headers['retry-after'] ? response.headers['retry-after']*1000 : retry_timeout;
                 reject(utils.error(retry_after, response.statusCode));
               } else {
-                reject(utils.error(json.error.message, response.statusCode));
+                reject(utils.error("Spotify : " + json.error.message, response.statusCode));
               }
             } else {
-              reject(utils.error("Something went wrong...", 500));
+              reject(utils.error("Spotify : Something went wrong...", 500));
             }
           }
-        } catch(e) {
-          reject(utils.error(e.message, 500));
+        } catch(err) {
+          reject(utils.error("Spotify : " + err.message, 500));
         }
       })
-    }).on('error', function(e) {
-      reject(utils.error(e.message, 500));
+    }).on('error', function(err) {
+      reject(utils.error("Spotify : " + err.message, 500));
     });
   })
 }
