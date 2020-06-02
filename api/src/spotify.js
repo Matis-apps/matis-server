@@ -736,7 +736,8 @@ function formatPlaylistToStandard(playlist){
   };
 }
 
-function formatTrackToStandard(track){
+function formatTrackToStandard(trackItem){
+  let track = trackItem.track;
   return {
     _obj: 'track',
     _from: 'spotify',
@@ -835,6 +836,7 @@ function formatAlbumToFeed(album) {
 }
 
 function formatPlaylistToFeed(playlist) {
+
   return {
     _obj: 'playlist',
     _from: 'spotify',
