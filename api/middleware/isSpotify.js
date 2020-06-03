@@ -10,6 +10,7 @@ module.exports.isSpotify = async (req, res, next) => {
         await refreshSpotify(req.user._id, req.user.spotify.token.refresh_token)
           .then(spotify_user => {
             req.spotify_id = spotify_user.account.id;
+            req.spotify_username = spotify_user.account.display_name;
             req.spotify_token = spotify_user.token.access_token;
             next()
           })
@@ -18,7 +19,7 @@ module.exports.isSpotify = async (req, res, next) => {
         next(utils.error("Can't acess user info", 500))
       }
     } else {
-      next(utils.error("No spotify account", 403))
+      next(utils.error("No Spotify account", 403))
     }
   } else {
     next(utils.error("No account", 401))

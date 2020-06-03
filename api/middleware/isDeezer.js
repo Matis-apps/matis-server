@@ -11,7 +11,7 @@ module.exports.isDeezer = (req, res, next) => {
         next(utils.error("Can't acess user info", 500))
       }
     } else {
-      next(utils.error("No deezer account", 403))
+      next(utils.error("No Deezer account", 403))
     }
   } else {
     next(utils.error("No account", 401))

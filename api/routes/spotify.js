@@ -5,7 +5,7 @@ const utils = require('../../utils');
 
 
 router.get('/me/releases', (req, res, next) => {
-  spotify.getMyReleases(req.spotify_token).then(data => {
+  spotify.getMyReleases(req.spotify_token, req.spotify_username).then(data => {
     res.status(200).json({
       'data': data,
       'genres': data.genres,

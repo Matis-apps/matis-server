@@ -571,7 +571,7 @@ function searchTrackISRC(access_token, query, isrc) {
  * @params user_id
  * @params access_token
  */
-async function getMyReleases(access_token) {
+async function getMyReleases(access_token, username) {
   const user_id = 'me';
   var releases = [];
   var error;
@@ -619,15 +619,20 @@ async function getMyReleases(access_token) {
   }
   releases.genres = genres;
 
-  const playlists = await fetchPlaylists(access_token).catch(err => error = err);
+  var playlists = await fetchPlaylists(access_token).catch(err => error = err);
   if(playlists && playlists.length > 0) {
+    try {
+      playlists = playlists.filter(p => p.owner.display_name != username);
+    } catch (err) {
+      error = err;
+    }
     await Promise
       .all(playlists.map(i => 
         fetchPlaylist(access_token, i.id).catch(err => error = err))
       )
       .then(results => {
-        results.forEach((a) => {
-          releases.push(formatPlaylistToFeed(a));
+        results.forEach(playlist => {
+          releases.push(formatPlaylistToFeed(playlist));
         })
       }).catch(err => error = err);
   }

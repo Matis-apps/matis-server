@@ -413,8 +413,7 @@ function getAlbums(access_token, user_id = 'me') {
  * @params user_id
  * @params access_token
  */
-async function getMyReleases(access_token) {
-  const user_id = 'me';
+async function getMyReleases(access_token, user_id) {
   var releases = [];
   var error;
 
@@ -449,7 +448,7 @@ async function getMyReleases(access_token) {
     }
   }
   releases.genres = genres;
-  const playlists = await fetchPlaylists(access_token, user_id).catch(err => error = err);
+  const playlists = await fetchPlaylists(access_token, 'me').catch(err => error = err);
   if(playlists && playlists.length > 0) {
     playlists.forEach(p => {
       if(!p.is_loved_track && p.creator.id != user_id) {

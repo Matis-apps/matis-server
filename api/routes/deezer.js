@@ -4,7 +4,7 @@ const deezer = require('../src/deezer');
 const utils = require('../../utils');
 
 router.get('/me/releases', (req, res, next) => {
-  deezer.getMyReleases(req.deezer_token).then(data => {
+  deezer.getMyReleases(req.deezer_token, req.deezer_id).then(data => {
     res.status(200).json({
       'data': data,
       'genres': data.genres,
