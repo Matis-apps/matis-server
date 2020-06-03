@@ -1,7 +1,6 @@
 const utils = require('../../utils');
 const User = require('mongoose').model('User');
 var randtoken = require('rand-token');
-var cookieParser = require('cookie-parser');
 
 function login(req) {
   return new Promise( async (resolve, reject) => {

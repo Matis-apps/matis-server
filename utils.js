@@ -53,7 +53,7 @@ function capitalize (string) {
 
 function removeParentheses(string) {
   if (typeof string !== 'string') return '';
-  return string.replace(/\([^()]*\)/g, '');
+  return string.replace(/\([^()]*\)/g, '').trim();
 }
 
 /**
@@ -129,9 +129,11 @@ function isSameUPC(upc1, upc2) {
   var shortI1 = upc1.replace(regex,'');
   var shortI2 = upc2.replace(regex,'');
 
+  const minSize = Math.min(shortI1.length, shortI2.length);
+
   let ruokay = (upc1 == upc2)
             || (shortI1 == upc2 || upc1 == shortI2 || shortI1 == shortI2)
-            || (shortI1.substring(0,10) == upc2.substring(0,10) || upc1.substring(0,10) == shortI2.substring(0,10) || shortI1.substring(0,10) == shortI2.substring(0,10));
+            || (shortI1.substring(0,minSize) == upc2.substring(0,minSize) || upc1.substring(0,minSize) == shortI2.substring(0,minSize) || shortI1.substring(0,minSize) == shortI2.substring(0,minSize));
   return ruokay;
 }
 

@@ -208,9 +208,28 @@ function matchAlbums(albums1, albums2) {
       if (utils.isSameUPC(i1.upc, i2.upc)) {
         matched.push(i2);
         break;
-      } else if (i1.name == i2.name && i1.updated_at == i2.updated_at) {
+      } else if (i1.name === i2.name && i1.updated_at === i2.updated_at) {
         matched.push(i2);
         break;
+      } else if (utils.removeParentheses(i1.name) == utils.removeParentheses(i2.name) && i1.artists.length == i2.artists.length) { // same name, then check the artists
+        matched.push(i2);
+        break;
+          
+        /* To be checked if this is really usefull
+        const length = i1.artists.length;
+        var countMatch = 0;
+        for (j = 0; j < length; j++) {
+          let artist1 = i1.artists[j].name.toUpperCase()
+          for (k = 0; k < length; k++) {
+            let artist2 = i2.artists[k].name.toUpperCase()
+            if(artist1 == artist2) countMatch++;
+          }
+        }
+        if (countMatch == length) {
+          matched.push(i2);
+          break;
+        }
+        */
       }
     }
     albums.push(matched);

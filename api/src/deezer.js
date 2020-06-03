@@ -13,6 +13,7 @@ const retry_timeout = 1800; // Limit number of retry
  */
 function httpsCall(options) {
   return new Promise((resolve, reject) => {
+    console.info('** REQUEST ** : ' + options.hostname + options.path);
     var req = https.get(options, response => {
       // Event when receiving the data
       var responseBody = "";
@@ -20,6 +21,7 @@ function httpsCall(options) {
 
       // Event when the request is ending
       response.on('end', () => {
+        console.info('** RESPONSE ** : ' + options.hostname + options.path + ' : ' + response.statusCode);
         if (response.statusCode === 200) {
           try {
             let json = JSON.parse(responseBody)
@@ -34,15 +36,18 @@ function httpsCall(options) {
                        : json.error.code == 800 ? 404
                        : json.error.code;
 
+              console.error("Deezer : " + json.error.message, code)
               reject(utils.error("Deezer : " + json.error.message, code));
             } else { // otherwise, json is ok
               resolve(json)
             }
           } catch(err) {
+            console.warn(err.message);
             reject(utils.error("Deezer : " + err.message, 500));
           }
         } else {
-          reject(utils.error("Deezer : " + response, response.statusCode));
+          console.warn(responseBody);
+          reject(utils.error("Deezer : " + responseBody, response.statusCode));
         }
       })
     })

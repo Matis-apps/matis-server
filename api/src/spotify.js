@@ -14,6 +14,7 @@ const retry_timeout = 1800; // Limit number of retry
  */
 const httpsCall = async function(options) {
   return new Promise((resolve, reject) => {
+    console.info('** REQUEST ** : ' + options.hostname + options.path);
     var req = https.get(options, response => {
       // Event when receiving the data
       var responseBody = "";
@@ -21,6 +22,7 @@ const httpsCall = async function(options) {
 
       // Event when the request is ending
       response.on('end', () => {
+        console.info('** RESPONSE ** : ' + options.hostname + options.path + ' : ' + response.statusCode);
         try {
           let json = JSON.parse(responseBody)
           if (response.statusCode === 200) {
@@ -33,21 +35,27 @@ const httpsCall = async function(options) {
             }
           } else {
             if(json.error) {
-              if (response.statusCode == 429 && response.headers['retry-after']) {
+              if (response.statusCode == 429) {
                 let retry_after = response.headers['retry-after'] ? response.headers['retry-after']*1000 : retry_timeout;
+                retry_after = retry_after < retry_timeout * 2 ? retry_after : retry_timeout;
+                console.warn('** REACHED QUOTA ** retry : ' + retry_after);
                 reject(utils.error(retry_after, response.statusCode));
               } else {
+                console.error(json.error.message)
                 reject(utils.error("Spotify : " + json.error.message, response.statusCode));
               }
             } else {
+              console.error('Spotify : Something went wrong...')
               reject(utils.error("Spotify : Something went wrong...", 500));
             }
           }
         } catch(err) {
+          console.error(err)
           reject(utils.error("Spotify : " + err.message, 500));
         }
       })
     }).on('error', function(err) {
+      console.error(err)
       reject(utils.error("Spotify : " + err.message, 500));
     });
   })
@@ -113,17 +121,7 @@ function recursiveHttps(access_token, path) {
       try {
         let response = await httpsCall(options);
 
-        var itemMainKey = Object.keys(response)[0];
-
-        if (response[itemMainKey].items) {
-          Array.prototype.push.apply(result, response[itemMainKey].items)
-          if(response[itemMainKey].next) { // if has a next object, keep going
-            recursive(index+call_limit)
-              .catch(() => resolve(result)); // resolve the iterations if an error happens
-          } else { // no more page, resolve with the result
-            resolve(result);
-          }
-        } else if (response.items) {
+        if (Object.keys(response).includes('items')) {
           Array.prototype.push.apply(result, response.items)
           if(response.next) { // if has a next object, keep going
             recursive(index+call_limit)
@@ -132,7 +130,19 @@ function recursiveHttps(access_token, path) {
             resolve(result);
           }
         } else {
-          throw utils.error("Unvalid data", 500);
+          var itemMainKey = Object.keys(response)[0];
+
+          if (Object.keys(response[itemMainKey]).includes('items')) {
+            Array.prototype.push.apply(result, response[itemMainKey].items)
+            if(response[itemMainKey].next) { // if has a next object, keep going
+              recursive(index+call_limit)
+                .catch(() => resolve(result)); // resolve the iterations if an error happens
+            } else { // no more page, resolve with the result
+              resolve(result);
+            }
+          } else {
+            throw utils.error("Unvalid data", 500);
+          }
         }
       } catch(error) {
         if (retry > 0 && error.code == 429) { // too many request and still have a retry, so wait for a delay and get back
@@ -232,11 +242,15 @@ function fetchArtist(access_token, id) {
       .then(result => {
         return result
       })
-      .then(async (artist) => {
-        await fetchArtistAlbums(access_token, id) // await for the response
+      .then((artist) => {
+        fetchArtistAlbums(access_token, id) // await for the response
           .then(artistAlbums => {
+
             artist.albums = artistAlbums.sort((a,b) => sortAlbums(a,b));
             resolve(artist);
+          })
+          .catch(error => {
+            reject(error)
           });
       })
       .catch(error => {
@@ -563,7 +577,6 @@ async function getMyReleases(access_token) {
   var error;
 
   const artists = await fetchArtists(access_token).catch(err => error = err);
-
   if(artists && artists.length > 0) {
     await Promise
       .all(artists.map(i => 
@@ -737,7 +750,7 @@ function formatPlaylistToStandard(playlist){
 }
 
 function formatTrackToStandard(trackItem){
-  let track = trackItem.track;
+  let track = trackItem.track||trackItem;
   return {
     _obj: 'track',
     _from: 'spotify',

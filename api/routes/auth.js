@@ -9,8 +9,8 @@ router.post('/login', (req, res, next) => {
     res.cookie('refresh_token', data.refresh_token.token, {
       maxAge: data.refresh_token.expires,
       httpOnly: true,
-      sameSite: 'none',
       secure: true,
+      sameSite: 'none',
     });
     res.status(200).json({access_token: data.access_token, has: data.has})
   }).catch(err => next(err));
@@ -21,8 +21,8 @@ router.post('/register', (req, res, next) => {
     res.cookie('refresh_token', data.refresh_token.token, {
       maxAge: data.refresh_token.expires,
       httpOnly: true,
-      sameSite: 'none',
       secure: true,
+      sameSite: 'none',
     });
     res.status(200).json({access_token: data.access_token, has: data.has})
   }).catch(err => next(err));
@@ -37,14 +37,24 @@ router.get('/token', passportRefreshMiddleware, (req, res, next) => {
       res.cookie('refresh_token', data.refresh_token.token, {
         maxAge: data.refresh_token.expires,
         httpOnly: true,
-        sameSite: 'none',
         secure: true,
+        sameSite: 'none',
       });
       res.status(200).json({access_token: data.access_token, has: data.has})
     }).catch(err => next(err));
   } else {
     next(utils.error("Missing refresh token", 400));    
   }
+});
+
+router.get('/logout', passportRefreshMiddleware, (req, res, next) => {
+  res.cookie('refresh_token', '', {
+    maxAge: 0,
+    httpOnly: true,
+    secure: true,
+    sameSite: 'none',
+  });
+  res.status(200).json();
 });
 
 module.exports = router;
