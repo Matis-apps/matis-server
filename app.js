@@ -26,10 +26,18 @@ app.use(express.json());
 app.use(morgan('dev'));
 
 // Allow CORS from this endpoint
-app.use(cors({
-  origin: process.env.APP_URL,
+var whitelist = ['https://dev.my-matis.com', 'https://my-matis.com', process.env.APP_URL];
+var corsOptions = {
+  origin: function (origin, callback) {
+    if (whitelist.indexOf(origin) !== -1) {
+      callback(null, true)
+    } else {
+      callback(utils.error('Not allowed by CORS', 401))
+    }
+  },
   credentials: true
-}));
+};
+app.use(cors(corsOptions));
 
 // Ease to parse cookies
 app.use(cookieParser());
