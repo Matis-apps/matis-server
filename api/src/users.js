@@ -98,7 +98,7 @@ function registerSpotify(req, code) {
     const requestBody = qs.stringify({
       grant_type: 'authorization_code',
       code: code,
-      redirect_uri: process.env.APP_URL + '/account?from=spotify',
+      redirect_uri: req.headers.origin + '/account?from=spotify',
     });
 
     const options = {
