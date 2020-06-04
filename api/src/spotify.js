@@ -22,7 +22,7 @@ const httpsCall = async function(options) {
 
       // Event when the request is ending
       response.on('end', () => {
-        console.info('** RESPONSE ** : ' + options.hostname + options.path + ' : ' + response.statusCode);
+        console.info('** RESPONSE ** : ' + options.hostname + options.path + ' : ' + response.statusCode + (responseBody ? ' => ' + responseBody.substr(0,50) + ' ...' : ''));
         try {
           let json = JSON.parse(responseBody)
           if (response.statusCode === 200) {
@@ -152,6 +152,14 @@ function recursiveHttps(access_token, path) {
         }
       }
     };
+
+    setTimeout(() => {
+      if (result.length > 0) {
+        resolve(result)
+      } else {
+        reject(utils.error("Waiting 1 minute and still no data ...", 500))
+      }
+    }, 60000) // 1 minutes
 
     recursive()
   })
@@ -290,7 +298,9 @@ function getRelatedArtists(access_token, id) {
       })
       .then(async (relatedArtists) => {
         await Promise
-          .all(relatedArtists.artists.map(i => fetchArtist(access_token, i.id)))
+          .all(relatedArtists.artists.map(i => 
+            fetchArtist(access_token, i.id).catch(err => console.log(err))
+          ))
           .then(results => {
             var artists = [];
             results.forEach((a) => {
@@ -390,7 +400,7 @@ function getPlaylistArtistRelease(access_token, id) {
                 }
               }
             })
-          }).catch(err => reject(error));
+          }).catch(err => reject(err));
 
         releases.sort((a,b) => sortLastReleases(a,b));
         resolve(releases);
@@ -404,7 +414,7 @@ async function getSearch(access_token, query, types = "*", strict = false) {
   const allowedTypes = ['artist', 'album', 'playlist', 'track'];
   var search_types = [];
   var results = new Object;
-  var error;
+  var error = null;
 
   if (types == "*") {
     search_types = allowedTypes;

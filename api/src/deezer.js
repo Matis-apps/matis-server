@@ -21,7 +21,7 @@ function httpsCall(options) {
 
       // Event when the request is ending
       response.on('end', () => {
-        console.info('** RESPONSE ** : ' + options.hostname + options.path + ' : ' + response.statusCode);
+        console.info('** RESPONSE ** : ' + options.hostname + options.path + ' : ' + response.statusCode + (responseBody ? ' => ' + responseBody.substr(0,50) + ' ...' : ''));
         if (response.statusCode === 200) {
           try {
             let json = JSON.parse(responseBody)
@@ -128,6 +128,14 @@ function recursiveHttps(access_token, path) {
       }
     };
 
+    setTimeout(() => {
+      if (result.length > 0) {
+        resolve(result)
+      } else {
+        reject(utils.error("Waiting 1 minute and still no data ...", 500))
+      }
+    }, 60000) // 1 minutes
+    
     recursive()
   })
 }
