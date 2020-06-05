@@ -384,8 +384,8 @@ function getRelatedArtists(access_token, id) {
           .all(relatedArtists.data.map(i => fetchArtist(null, i.id)))
           .then(results => {
             var artists = [];
-            results.forEach((a) => {
-              if (a.albums && a.albums.length > 0) {            
+            results.forEach(a => {
+              if (a && a.albums && a.albums.length > 0) {
                 artists.push(formatArtistToFeed(a));
               }
             })
@@ -432,8 +432,8 @@ async function getMyReleases(access_token, user_id) {
         fetchArtist(access_token, i.id).catch(err => error = err))
       )
       .then(results => {
-        results.forEach((a) => {
-          if (a.albums && a.albums.length > 0) {
+        results.forEach(a => {
+          if (a && a.albums && a.albums.length > 0) {
             releases.push(formatArtistToFeed(a));
           }
         })
@@ -459,7 +459,7 @@ async function getMyReleases(access_token, user_id) {
   const playlists = await fetchPlaylists(access_token, 'me').catch(err => error = err);
   if(playlists && playlists.length > 0) {
     playlists.forEach(p => {
-      if(!p.is_loved_track && p.creator.id != user_id) {
+      if(p && !p.is_loved_track && p.creator.id != user_id) {
         releases.push(formatPlaylistToFeed(p));
       }
     });
@@ -502,8 +502,8 @@ function getPlaylistArtistRelease(access_token, id) {
             fetchArtist(access_token, i.id).catch(err => console.log(err)))
           )
           .then(results => {
-            results.forEach((a) => {
-              if (a.albums && a.albums.length > 0) {
+            results.forEach(a => {
+              if (a && a.albums && a.albums.length > 0) {
                 releases.push(formatArtistToFeed(a));
               }
             })
@@ -532,8 +532,8 @@ async function getReleases(access_token, user_id) {
         fetchArtist(access_token, i.id).catch(err => error = err))
       )
       .then(results => {
-        results.forEach((a) => {
-          if (a.albums && a.albums.length > 0) {            
+        results.forEach(a => {
+          if (a && a.albums && a.albums.length > 0) {
             releases.push(formatArtistToFeed(a));
           }
         })

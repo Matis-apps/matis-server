@@ -251,9 +251,9 @@ function fetchArtist(access_token, id) {
         return result
       })
       .then((artist) => {
+        if(!artist) throw mutils.error('No artist configured', 500);
         fetchArtistAlbums(access_token, id) // await for the response
           .then(artistAlbums => {
-
             artist.albums = artistAlbums.sort((a,b) => sortAlbums(a,b));
             resolve(artist);
           })
@@ -303,8 +303,8 @@ function getRelatedArtists(access_token, id) {
           ))
           .then(results => {
             var artists = [];
-            results.forEach((a) => {
-              if (a.albums && a.albums.length > 0) {            
+            results.forEach(a => {
+              if (a && a.albums && a.albums.length > 0) {            
                 artists.push(formatArtistToFeed(a));
               }
             })
@@ -389,8 +389,8 @@ function getPlaylistArtistRelease(access_token, id) {
             fetchArtist(access_token, i.id).catch(err => console.log(err)))
           )
           .then(results => {
-            results.forEach((a) => {
-              if (a.albums && a.albums.length > 0) {
+            results.forEach(a => {
+              if (a && a.albums && a.albums.length > 0) {
                 let formatedAlbum = formatArtistToFeed(a);
                 let existingArtist = releases.find(e => {
                   return e.author.id == formatedAlbum.author.id;
@@ -593,8 +593,8 @@ async function getMyReleases(access_token, username) {
         fetchArtist(access_token, i.id).catch(err => error = err))
       )
       .then(results => {
-        results.forEach((a) => {
-          if (a.albums && a.albums.length > 0) {
+        results.forEach(a => {
+          if (a && a.albums && a.albums.length > 0) {
             releases.push(formatArtistToFeed(a));
           }
         })
