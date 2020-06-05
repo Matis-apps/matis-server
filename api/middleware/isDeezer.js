@@ -1,6 +1,6 @@
 const utils = require('../../utils');
 
-module.exports.isDeezer = (req, res, next) => {
+module.exports = (req, res, next) => {
   if (req.user) {
     if (req.user.deezer && req.user.deezer.account && req.user.deezer.token) {
       if (req.user.deezer.account.id && req.user.deezer.token.access_token) {

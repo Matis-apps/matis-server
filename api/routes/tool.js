@@ -3,20 +3,6 @@ const router = express.Router();
 const tool = require('../src/tool');
 const utils = require('../../utils');
 
-// middleware allowing to call middlware only if needed
-router.use((req, res, next) => {
-  const from = req.query.from || null;
-  if ((typeof from === 'string' && from != 'spotify') || (from == null)) {
-    try {
-      require('../middleware/isSpotify').isSpotify(req, res, next); // needed to refresh the token
-      return;
-    } catch(err) {
-      next(err);
-    }
-  } else {
-    next()
-  }
-});
 
 router.get('/upc', (req, res, next) => {
   if (!req.query.q) {
@@ -29,9 +15,9 @@ router.get('/upc', (req, res, next) => {
     const from = req.query.from || '*';
     const query = req.query.q;
     const upc = req.query.upc;
-    const user = req.user;
+    const spotify_token = req.spotify_token;
 
-    tool.crossAlbumUPC(user, from, query, upc).then(data => {
+    tool.crossAlbumUPC(spotify_token, from, query, upc).then(data => {
       res.status(200).json({
         'data': data,
       })
@@ -50,9 +36,9 @@ router.get('/isrc', (req, res, next) => {
     const from = req.query.from || '*';
     const query = req.query.q;
     const isrc = req.query.isrc;
-    const user = req.user;
+    const spotify_token = req.spotify_token;
 
-    tool.crossTrackISRC(user, from, query, isrc).then(data => {
+    tool.crossTrackISRC(spotify_token, from, query, isrc).then(data => {
       res.status(200).json({
         'data': data,
       })
@@ -69,8 +55,9 @@ router.get('/search', (req, res, next) => {
   } else {
     const query = req.query.q;
     const user = req.user;
+    const spotify_token = req.spotify_token;
 
-    tool.crossSearch(user, query).then(data => {
+    tool.crossSearch(spotify_token, query).then(data => {
       res.status(200).json({
         'data': data,
       })

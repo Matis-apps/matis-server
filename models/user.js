@@ -7,7 +7,6 @@ const UserSchema = new mongoose.Schema({
     spotify: Object,
     hash: String,
     salt: String,
-    refresh_token: String,
     register_date: Date,
 });
 

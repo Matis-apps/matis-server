@@ -2,7 +2,7 @@ const deezer = require('./deezer');
 const spotify = require('./spotify');
 const utils = require('../../utils');
 
-function crossAlbumUPC (user, fromPlateform, query, upc) {
+function crossAlbumUPC (spotify_token, fromPlateform, query, upc) {
   return new Promise(async (resolve, reject) => {
     var plateforms = new Object;
     var hasResults = false;
@@ -17,7 +17,6 @@ function crossAlbumUPC (user, fromPlateform, query, upc) {
     }
 
     if(fromPlateform != 'spotify') {
-      var spotify_token = user.spotify.token.access_token;
       if (spotify_token) {
         const spotifyResult = await spotify.searchAlbumUPC(spotify_token, query, upc)
           .then(result => {
@@ -42,7 +41,7 @@ function crossAlbumUPC (user, fromPlateform, query, upc) {
   });
 }
 
-function crossTrackISRC (user, fromPlateform, query, isrc) {
+function crossTrackISRC (spotify_token, fromPlateform, query, isrc) {
   return new Promise(async (resolve, reject) => {
     var plateforms = new Object;
     var hasResults = false;
@@ -57,7 +56,6 @@ function crossTrackISRC (user, fromPlateform, query, isrc) {
     }
 
     if(fromPlateform != 'spotify') {
-      var spotify_token = user.spotify.token.access_token;
       if (spotify_token) {
         const spotifyResult = await spotify.searchTrackISRC(spotify_token, query, isrc)
           .then(result => {
@@ -83,7 +81,7 @@ function crossTrackISRC (user, fromPlateform, query, isrc) {
 }
 
 
-function crossSearch (user, query) {
+function crossSearch (spotify_token, query) {
   return new Promise(async (resolve, reject) => {
     var plateforms = new Object;
     var hasResults = false;
@@ -96,7 +94,6 @@ function crossSearch (user, query) {
       })
       .catch(err => error = err);
 
-    var spotify_token = user.spotify.token.access_token;
     if (spotify_token) {
       const spotifyResult = await spotify.getSearch(spotify_token, query)
         .then(result => {
@@ -104,8 +101,6 @@ function crossSearch (user, query) {
           hasResults = true;
         })
         .catch(err => error = err);
-    } else {
-      error = utils.error("No access_token for Spotify", 401);
     }
 
     if(hasResults) {

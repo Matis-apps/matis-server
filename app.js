@@ -10,6 +10,7 @@ const cookieParser = require('cookie-parser');
 // Database
 require('./config/database');
 require('./models/user');
+require('./models/config');
 
 // Pass the global passport object into the configuration function
 require('./config/passport')(passport_access);
@@ -47,16 +48,23 @@ const authRoutes = require('./api/routes/auth')
 const usersRoutes = require('./api/routes/users')
 const deezerRoutes = require('./api/routes/deezer')
 const spotifyRoutes = require('./api/routes/spotify')
+const meSpotifyRoutes = require('./api/routes/meSpotify')
 const toolRoutes = require('./api/routes/tool')
 
 const passportMiddleware = passport_access.authenticate('jwt_access_token', {session: false});
-const refreshTokenMiddleware = require('./api/middleware/addRefreshToken').addRefreshToken;
+const refreshTokenMiddleware = require('./api/middleware/addRefreshToken');
+const globalSpotifyMiddleware = require('./api/middleware/globalSpotify');
 
 app.use('/auth', authRoutes);
-app.use('/users', passportMiddleware, refreshTokenMiddleware, usersRoutes);
-app.use('/tool', passportMiddleware, refreshTokenMiddleware, toolRoutes);
-app.use('/deezer', passportMiddleware, refreshTokenMiddleware, require('./api/middleware/isDeezer').isDeezer, deezerRoutes);
-app.use('/spotify', passportMiddleware, refreshTokenMiddleware, require('./api/middleware/isSpotify').isSpotify, spotifyRoutes);
+
+app.use(passportMiddleware);
+app.use(refreshTokenMiddleware);
+
+app.use('/users', usersRoutes);
+app.use('/tool', globalSpotifyMiddleware, toolRoutes);
+app.use('/deezer', require('./api/middleware/isDeezer'), deezerRoutes);
+app.use('/spotify/me', require('./api/middleware/isSpotify'), meSpotifyRoutes);
+app.use('/spotify', globalSpotifyMiddleware, spotifyRoutes);
 
 // No route found, return an error
 app.use((req, res, next) => {

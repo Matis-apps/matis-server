@@ -1,32 +1,44 @@
 const https = require('https');
 const qs = require('querystring');
 const utils = require('../../utils');
+const Config = require('mongoose').model('Config');
 const User = require('mongoose').model('User');
 
+const access_key = 'spotify_access_token';
+const refresh_key = 'spotify_refresh_token';
+const expires_key = 'spotify_expires_token';
+
 module.exports = async (req, res, next) => {
-  if (req.user) {
-    if (req.user._id && req.user.spotify && req.user.spotify.token) {
-      if (req.user.spotify.token.refresh_token) {
-        await refreshSpotify(req.user._id, req.user.spotify.token.refresh_token)
-          .then(spotify_user => {
-            req.spotify_id = spotify_user.account.id;
-            req.spotify_username = spotify_user.account.display_name;
-            req.spotify_token = spotify_user.token.access_token;
-            next()
-          })
-          .catch(err => next(utils.error(err, 500)))
-      } else {
-        next(utils.error("Can't acess user info", 500))
-      }
-    } else {
-      next(utils.error("No Spotify account", 403))
-    }
+  var access_token, refresh_token;
+
+  try {
+    let conf1 = await Config.findOne({key: access_key});
+    let conf2 = await Config.findOne({key: refresh_key});
+
+    access_token = conf1.value;
+    refresh_token = conf2.value;
+
+  } catch(err) {
+    next(utils.error(err, 500))
+  }
+
+  if (access_token && refresh_token) {
+    req.spotify_id = -1;
+    req.spotify_username = 'Matis';
+    req.spotify_token = access_token; // By default
+    
+    await refreshSpotify(refresh_token)
+      .then(config => {
+        req.spotify_token = config.value;
+        next();
+      })
+      .catch(err => next()) // Do next anyway as the original access_token as been set above
   } else {
-    next(utils.error("No account", 401))
+    next(utils.error("No config found", 500))
   }
 }
 
-function refreshSpotify(_id, refresh_token) {
+function refreshSpotify(refresh_token) {
   return new Promise(async (resolve, reject) => {
 
     const requestBody = qs.stringify({
@@ -58,8 +70,8 @@ function refreshSpotify(_id, refresh_token) {
             reject(utils.error("Unvalid json", 500));
           } else {
             if (response.statusCode === 200) {
-               await saveSpotify(_id, json)
-                .then(user => resolve(user.spotify))
+               await saveConfig(json)
+                .then(config => resolve(config))
                 .catch(err => reject(err.message, 500))
             } else if (json.error) {
               reject(utils.error(json.error, response.statusCode));
@@ -80,22 +92,30 @@ function refreshSpotify(_id, refresh_token) {
   })
 }
 
-function saveSpotify(_id, json) {
+function saveConfig(json) {
   return new Promise(async (resolve, reject) => {
-    const query = { _id: _id };
-    const update = {
-      "spotify.token.access_token": json.access_token,
-      "spotify.token.expires_in": json.expires_in,
-      "spotify.token.scope": json.scope,
-    };
-    if (json.refresh_token) {
-      update["spotify.token.refresh_token"] = json.refresh_token;
+    try {
+      if (json.refresh_token) {
+        await updateConfig(refresh_key, json.refresh_token);
+      }
+      if(json.expires_in) {
+        await updateConfig(expires_key, json.expires_in);
+      }
+      if (json.access_token) {
+        let config_token = await updateConfig(access_key, json.access_token);
+        resolve(config_token)
+      }
     }
-    const options = { new: true, upsert: true, useFindAndModify: false };
-    await User.findOneAndUpdate(query, update, options)
-      .then((user) => {
-        resolve(user)
-      })
-      .catch(err => reject(utils.error(err, 500)));
+    catch (err) {
+      reject(mutils.error(err, 500))
+    }
   })
+}
+
+function updateConfig(key, value) {
+  const query = { 'key': key };
+  const update = { 'value': value };
+  const options = { new: true, upsert: true, useFindAndModify: false };
+
+  return Config.findOneAndUpdate(query, update, options);
 }

@@ -1,6 +1,6 @@
 const utils = require('../../utils');
 
-module.exports.addRefreshToken = (req, res, next) => {
+module.exports = (req, res, next) => {
   let refresh_token = req.cookies.refresh_token;
 
   if (refresh_token) {
