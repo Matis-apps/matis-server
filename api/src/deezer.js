@@ -743,7 +743,8 @@ function searchAlbumUPC(query, upc) {
 
     var albums, fullAlbums;
     do {
-      albums = fullAlbums = null;
+      albums = null;
+      fullAlbums = null;
       const path = '/search/album?limit=' + limit + '&index=' + index + '&q='+encodeURIComponent(utils.removeParentheses(query));
       try {
         albums = await genericHttps(null, path);
@@ -769,6 +770,38 @@ function searchAlbumUPC(query, upc) {
         index+=limit;
       }
     } while (!album && total > index)
+
+    if(!album) {
+      index = 0;
+      do {
+        albums = null;
+        fullAlbums = null;
+        const path = '/search?limit=' + limit + '&index=' + index + '&q='+encodeURIComponent(utils.removeParentheses(query));
+        try {
+          albums = await genericHttps(null, path);
+          if(albums && albums.data) {
+            total = albums.total;
+            try {
+              fullAlbums = await Promise.all(albums.data.filter(i => !!i.album).map(i => fetchAlbum(null, i.album.id).catch(err => error = err)));
+              //fullAlbums = await Promise.all(albums.data.filter(i => utils.checkSize(query, i.title)).map(i => fetchAlbum(i.id)));
+            } finally {
+              if (fullAlbums) {
+                album = fullAlbums.find(a => utils.isSameUPC(a.upc, upc));
+                album = album ? formatAlbumToStandard(album) : null;
+              } else {
+                throw utils.error("Invalid data", 500)
+              }
+            }
+          } else {
+            throw utils.error("Invalid data", 500)
+          }
+        } catch(err) {
+          error = err;
+        } finally {
+          index+=limit;
+        }
+      } while (!album && total > index)
+    }
 
     if (album) {
       resolve(album)
