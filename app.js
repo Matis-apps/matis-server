@@ -74,7 +74,7 @@ app.use((req, res, next) => {
 app.use((error,  req, res, next) => {
   console.error("!!! ERROR !!!!")
   if(error.stack) console.error(error.stack)
-  else console.error(err.message)
+  else console.error(error.message)
   res.status(error.code || 500).json({
     error : {
       code: error.code,
