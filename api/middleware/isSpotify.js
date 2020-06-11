@@ -64,7 +64,7 @@ function refreshSpotify(_id, refresh_token) {
             } else if (json.error) {
               reject(utils.error(json.error, response.statusCode));
             } else {
-              reject(utils.error("Something whent wrong...", 500));
+              reject(utils.error("Something went wrong...", 500));
             }
           }
         } catch (e) {

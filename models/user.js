@@ -5,6 +5,8 @@ const UserSchema = new mongoose.Schema({
     email: String,
     deezer: Object,
     spotify: Object,
+    discogs: Object,
+    temp_discogs_oauth: String,
     hash: String,
     salt: String,
     register_date: Date,

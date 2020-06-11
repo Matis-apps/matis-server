@@ -24,7 +24,7 @@ router.post('/register', (req, res, next) => {
       secure: true,
       sameSite: 'none',
     });
-    res.status(200).json({access_token: data.access_token, has: data.has})
+    res.status(200).json({access_token: data.access_token})
   }).catch(err => next(err));
 });
 

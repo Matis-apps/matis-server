@@ -106,3 +106,8 @@ dist
 # Certificate
 *.pem
 
+# DS_Store file
+.DS_Store
+
+# Files for testing the Discogs import
+api/src/res

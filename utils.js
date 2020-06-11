@@ -125,16 +125,17 @@ function checkSize(one, two, accepted_diff = 200) {
 }
 
 function isSameUPC(upc1, upc2) {
+  if (!upc1 || !upc2) return false;
+
   const regex = new RegExp('^0+');
   var shortI1 = upc1.replace(regex,'');
   var shortI2 = upc2.replace(regex,'');
 
   const minSize = Math.min(shortI1.length, shortI2.length);
 
-  let ruokay = (upc1 == upc2)
-            || (shortI1 == upc2 || upc1 == shortI2 || shortI1 == shortI2)
-            || (shortI1.substring(0,minSize) == upc2.substring(0,minSize) || upc1.substring(0,minSize) == shortI2.substring(0,minSize) || shortI1.substring(0,minSize) == shortI2.substring(0,minSize));
-  return ruokay;
+  return (upc1 == upc2)
+      || (shortI1 == upc2 || upc1 == shortI2 || shortI1 == shortI2)
+      || (shortI1.substring(0,minSize) == upc2.substring(0,minSize) || upc1.substring(0,minSize) == shortI2.substring(0,minSize) || shortI1.substring(0,minSize) == shortI2.substring(0,minSize));
 }
 
 exports.error = error;

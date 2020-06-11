@@ -11,6 +11,7 @@ const cookieParser = require('cookie-parser');
 require('./config/database');
 require('./models/user');
 require('./models/config');
+require('./models/discogs_collection');
 
 // Pass the global passport object into the configuration function
 require('./config/passport')(passport_access);
@@ -49,6 +50,7 @@ const usersRoutes = require('./api/routes/users')
 const deezerRoutes = require('./api/routes/deezer')
 const spotifyRoutes = require('./api/routes/spotify')
 const meSpotifyRoutes = require('./api/routes/meSpotify')
+const discogsRoutes = require('./api/routes/discogs')
 const toolRoutes = require('./api/routes/tool')
 
 const passportMiddleware = passport_access.authenticate('jwt_access_token', {session: false});
@@ -65,6 +67,7 @@ app.use('/tool', globalSpotifyMiddleware, toolRoutes);
 app.use('/deezer', require('./api/middleware/isDeezer'), deezerRoutes);
 app.use('/spotify/me', require('./api/middleware/isSpotify'), meSpotifyRoutes);
 app.use('/spotify', globalSpotifyMiddleware, spotifyRoutes);
+app.use('/discogs', require('./api/middleware/isDiscogs'), discogsRoutes);
 
 // No route found, return an error
 app.use((req, res, next) => {

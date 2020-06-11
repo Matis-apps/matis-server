@@ -170,7 +170,7 @@ function recursiveHttps(access_token, path) {
 ////////////////
 async function fetchSearch(access_token, type, query, strict) {
   return new Promise((resolve, reject) => {
-    const path = '/v1/search?type='+type+'&q='+encodeURI(query);
+    const path = '/v1/search?type='+type+'&q='+encodeURIComponent(query);
     genericHttps(access_token, path)
       .then(result => {
         resolve(result)
@@ -304,7 +304,7 @@ function getRelatedArtists(access_token, id) {
           .then(results => {
             var artists = [];
             results.forEach(a => {
-              if (a && a.albums && a.albums.length > 0) {            
+              if (a && a.albums && a.albums.length > 0) {
                 artists.push(formatArtistToFeed(a));
               }
             })
@@ -538,7 +538,7 @@ function searchTrackISRC(access_token, query, isrc) {
     var tracks, fullTracks;
     do {
       tracks = fullTracks = null;
-      const path = '/v1/search?type=track&limit=' + limit + '&offset=' + index + '&q=' + encodeURI(query);
+      const path = '/v1/search?type=track&limit=' + limit + '&offset=' + index + '&q=' + encodeURIComponent(query);
 
       try {
         tracks = await genericHttps(access_token, path);
@@ -742,6 +742,7 @@ function formatAlbumToStandard(album){
     picture: album.images && album.images.length > 0 ? album.images[0].url : null,
     link: album.external_urls.spotify ? album.external_urls.spotify : "https://open.spotify.com/album/"+album.id,
     upc: album.external_ids ? album.external_ids.upc : null,
+    nb_tracks: album.total_tracks,
     artists: album.artists.map(i => formatArtistToStandard(i)),
     updated_at: album.release_date,
     added_at: null,
@@ -778,7 +779,7 @@ function formatTrackToStandard(trackItem){
     preview: track.preview_url,
     duration: track.duration_ms ? timestampToTime(track.duration_ms) : null,
     updated_at: track.album ? track.album.release_date : null,
-    artist: track.artists ? track.artists.map(i => formatArtistToStandard(i)) : track.track.artists.map(i => formatArtistToStandard(i))
+    artist: track.artists ? track.artists.map(i => formatArtistToStandard(i)) : track.track.artists.map(i => formatArtistToStandard(i)),
   };
 }
 

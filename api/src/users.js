@@ -4,23 +4,40 @@ const qs = require('querystring');
 const User = require('mongoose').model('User');
 const deezerMe = require('./deezer').getMeAccount;
 const spotifyMe = require('./spotify').getMeAccount;
+const discogsIdentity = require('./discogs').getIdentity;
+const discogsMe = require('./discogs').getMeAccount;
 
 function me(req) {
   return new Promise((resolve, reject) => {
-    resolve({
-      'name': req.user.name,
-      'email': req.user.email,
-      'deezer': req.user.deezer,
-      'spotify': req.user.spotify,
+    const user = req.user;
+
+    var has = [];
+    if (user.deezer) {
+      has.push('Deezer');
+    }
+    if (user.spotify) {
+      has.push('Spotify');
+    }
+    if (user.discogs) {
+      has.push('Discogs');
+    }
+
+    resolve ({
+      'user': {
+        'name': user.name,
+        'email': user.email,
+        'deezer': user.deezer,
+        'spotify': user.spotify,
+        'discogs': user.discogs,
+      },
+      'has': has
     })
   })
 }
 
-function accounts(req) {
-
-}
-
-
+////////////
+// DEEZER //
+////////////
 function registerDeezer(req, code) {
   return new Promise(async (resolve, reject) => {
 
@@ -91,7 +108,9 @@ function saveDeezer(req, json) {
   })
 }
 
-
+/////////////
+// SPOTIFY //
+/////////////
 function registerSpotify(req, code) {
   return new Promise(async (resolve, reject) => {
 
@@ -132,7 +151,7 @@ function registerSpotify(req, code) {
             } else if (json.error) {
               reject(utils.error(json.error, response.statusCode));
             } else {
-              reject(utils.error("Something whent wrong...", 500));
+              reject(utils.error("Something went wrong...", 500));
             }
           }
         } catch (e) {
@@ -171,9 +190,168 @@ function saveSpotify(req, json) {
   })
 }
 
+/////////////
+// DISCOGS //
+/////////////
+function requestTokenDiscogs(req) {
+  return new Promise((resolve, reject) => {
+
+    let timestamp = Math.floor(Date.now() / 1000);
+    const authorizationHeader = {
+      oauth_consumer_key: process.env.DISCOGS_CLIENT_ID,
+      oauth_nonce: 'ABC' + timestamp,
+      oauth_signature: process.env.DISCOGS_CLIENT_SECRET + '&',
+      oauth_signature_method: 'PLAINTEXT',
+      oauth_timestamp: timestamp,
+      oauth_callback: req.headers.origin + '/account?from=discogs',
+    }
+
+    const options = {
+      hostname: 'api.discogs.com',
+      path: '/oauth/request_token',
+      method: 'GET',
+      headers: {
+        'Authorization': 'OAuth ' + Object.keys(authorizationHeader).map(k => k + '=' + authorizationHeader[k]).join(','),
+        'User-Agent': 'API/Matis'
+      },
+    };
+    
+    const request = https.request(options, response => {
+      // Event when receiving the data
+      var responseBody = "";
+      response.on('data', function(chunck) { responseBody += chunck });
+
+      // Event when the request is ending
+      response.on('end', () => {
+        if (response.statusCode === 200) {
+          let discogsOAuthToken = responseBody.split('&')[0].split('=')[1];
+          let discogsOAuthSecretToken = responseBody.split('&')[1].split('=')[1];
+          saveTempDiscogsToken(req.user._id, discogsOAuthSecretToken)
+            .then(() => resolve(discogsOAuthToken))
+            .catch((err) => reject(err))
+        } else {
+          reject(utils.error(responseBody, response.statusCode));
+        }
+      })
+    })
+
+    request.on('error', (e) => {
+      reject(utils.error(e.message, 500));
+    });
+    request.end();
+  })
+}
+
+function saveTempDiscogsToken(id, token) {
+  return new Promise(async (resolve, reject) => {
+    const query = { _id: id };
+    const update = { temp_discogs_oauth: token };
+    const options = { new: true, upsert: true, useFindAndModify: false };
+
+    await User.findOneAndUpdate(query, update, options)
+      .then((user) => resolve())
+      .catch(err => reject(utils.error(err, 500)));
+  })
+}
+
+function registerDiscogs(req, token, verify) {
+  return new Promise(async (resolve, reject) => {
+
+    let timestamp = Math.floor(Date.now() / 1000);
+    const authorizationHeader = {
+      oauth_consumer_key: process.env.DISCOGS_CLIENT_ID,
+      oauth_nonce: 'ABC' + timestamp,
+      oauth_token: token,
+      oauth_signature: process.env.DISCOGS_CLIENT_SECRET + '&' + req.user.temp_discogs_oauth,
+      oauth_signature_method: 'PLAINTEXT',
+      oauth_timestamp: timestamp,
+      oauth_verifier: verify,
+    }
+
+    const options = {
+      hostname: 'api.discogs.com',
+      path: '/oauth/access_token',
+      method: 'GET',
+      headers: {
+        'Authorization': 'OAuth ' + Object.keys(authorizationHeader).map(k => k + '=' + authorizationHeader[k]).join(','),
+        'User-Agent': 'API/Matis'
+      },
+    };
+
+    console.log(options)
+
+    const request = https.request(options, response => {
+      // Event when receiving the data
+      var responseBody = "";
+      response.on('data', function(chunck) { responseBody += chunck });
+
+      // Event when the request is ending
+      response.on('end', async () => {
+        console.log('registerDiscogs responseBody')
+        console.log(responseBody)
+
+        try {
+          if (response.statusCode === 200) {
+            let responseArray = responseBody.split('&');
+            if (responseArray.length >= 2) {
+              let oauth_token = responseArray[0].split('=')[1];
+              let oauth_token_secret = responseArray[1].split('=')[1];
+              await saveDiscogs(req.user._id, oauth_token, oauth_token_secret)
+                .then(user => resolve(user.discogs))
+                .catch(err => reject(err))
+            } else {
+              reject(utils.error("Invalid response from Discogs ", 500));
+            }
+          } else {
+            reject(utils.error(responseBody, 500));
+          }
+        } catch (e) {
+          reject(utils.error(e + " - " + responseBody, 500));
+        }
+      })
+    })
+    request.on('error', (e) => {
+      reject(utils.error(e.message, 500));
+    });
+    request.end();
+  })
+}
+
+function saveDiscogs(id, oauth_token, oauth_token_secret) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const identity = await discogsIdentity(oauth_token, oauth_token_secret);
+      console.log('identity')
+      console.log(identity)
+      const me = await discogsMe(oauth_token, oauth_token_secret, identity.username);
+      console.log('me')
+      console.log(me)
+
+      if (me) {
+        const query = { _id: id };
+        const update = {
+          discogs: {
+            account: me,
+            token: {oauth_token, oauth_token_secret},
+          } 
+        };
+        const options = { new: true, upsert: true, useFindAndModify: false };
+        await User.findOneAndUpdate(query, update, options)
+          .then((user) => {
+            resolve(user)
+          })
+          .catch(err => reject(utils.error(err, 500)));
+      } else {
+        reject(utils.error("Can't retrieve spotify/user/me", 500))
+      }
+    } catch (err) {
+      reject(utils.error(err.message, 500));
+    }
+  })
+}
 
 exports.me = me;
-exports.accounts = accounts;
 exports.registerDeezer = registerDeezer;
 exports.registerSpotify = registerSpotify;
-
+exports.requestTokenDiscogs = requestTokenDiscogs;
+exports.registerDiscogs = registerDiscogs;

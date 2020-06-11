@@ -94,6 +94,9 @@ function formatUserAuth(user) {
   if (user.spotify) {
     has.push('Spotify');
   }
+  if (user.discogs) {
+    has.push('Discogs');
+  }
   return { access_token, refresh_token, has };
 }
 

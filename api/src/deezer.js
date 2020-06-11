@@ -36,7 +36,7 @@ function httpsCall(options) {
                        : json.error.code == 800 ? 404
                        : json.error.code;
 
-              console.error("Deezer : " + json.error.message, code)
+              //console.error("Deezer : " + json.error.message, code)
               reject(utils.error("Deezer : " + json.error.message, code));
             } else { // otherwise, json is ok
               resolve(json)
@@ -326,7 +326,7 @@ function fetchFollowers(access_token, user_id) {
 
 function fetchSearch(type, query, strict) {
   return new Promise((resolve, reject) => {
-    const path = '/search/'+type+'?q='+encodeURI(query)+(strict == false ? '&sort=ranking':'');
+    const path = '/search/'+type+'?q='+encodeURIComponent(query)+(strict == false ? '&sort=ranking':'');
     genericHttps(null, path)
       .then(result => {
         resolve(result);
@@ -826,7 +826,7 @@ function searchTrackISRC(query, isrc) {
     var tracks, fullTracks;
     do {
       tracks = fullTracks = null;
-      const path = '/search/track?limit=' + limit + '&index=' + index + '&q='+encodeURI(query);
+      const path = '/search/track?limit=' + limit + '&index=' + index + '&q='+encodeURIComponent(query);
 
       try {
         tracks = await genericHttps(null, path);
@@ -912,6 +912,7 @@ function formatAlbumToStandard(album){
     picture: album.cover,
     link: album.link,
     upc: album.upc || null,
+    nb_tracks: album.nb_tracks,
     artists: artists,
     updated_at: album.release_date,
     added_at: album.time_add ? timestampToDate(album.time_add) : null,
