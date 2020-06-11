@@ -405,34 +405,29 @@ function compareAlbums(discogs, compare, nbAlbumsToCompare) {
   if (discogs.album.name.toUpperCase() === compare.name.toUpperCase()) { // checke the name of the album => 50%
     score+=40;
   } else {
-    let regex = new RegExp('[^a-zA-Z0-9 ]', 'g');
-    const discogsName = discogs.album.name.replace(regex, '').toUpperCase()
-    const discogsWords = discogsName.split(' ');
+    const regex = new RegExp('[^a-zA-Z0-9 ]', 'g');
+    const discogsWords = discogs.album.name.replace(regex, '').toUpperCase().split(' ');
     const discogsNbWords = discogsWords.length;
     var discogsNbSameWords = 0;
 
-    const compareName = compare.name.replace(regex, '').toUpperCase()
-    const compareWords = compareName.split(' ');
+    const compareWords = compare.name.replace(regex, '').toUpperCase().split(' ');
     const compareNbWords = compareWords.length;
     var compareNbSameWords = 0;
 
-    discogsWords.forEach(word => {
-      if(compareName.includes(word)) {
-        discogsNbSameWords++;
+    for (let i = 0; i < discogsWords.length; i++) {
+      for (let j = 0; j < compareWords.length; j++) {
+        if ( discogsWords[i].includes(compareWords[j]) ) compareNbSameWords++;
+        if ( compareWords[j].includes(discogsWords[i]) ) discogsNbSameWords++;
       }
-    })
-    compareWords.forEach(word => {
-      if(discogsName.includes(word)) {
-        compareNbSameWords++;
-      }
-    })
+    }
+
     if (discogsNbSameWords + compareNbSameWords === 0) {
       score-=40;
     } else {
       const deltaDiscogs = Math.abs(discogsNbWords - discogsNbSameWords);
       const deltaCompare = Math.abs(compareNbWords - compareNbSameWords);
-      score+= (discogsNbWords-deltaDiscogs)/discogsNbWords * 20; // check the number of same word in the album name => 25%
-      score+= (compareNbWords-deltaCompare)/compareNbWords * 20; // check the number of same word in the album name => 25%
+      score+= (discogsNbWords-deltaDiscogs)/discogsNbWords * 15; // check the number of same word in the album name => 25%
+      score+= (compareNbWords-deltaCompare)/compareNbWords * 15; // check the number of same word in the album name => 25%
     }
   }
 
@@ -445,7 +440,7 @@ function compareAlbums(discogs, compare, nbAlbumsToCompare) {
     const maxMonth = 24;
     const diffMonth = Math.abs(moment(discogs.album.release_date).diff(moment(compare.updated_at), 'months'));
     if (diffMonth < maxMonth) {
-      score+= (maxMonth-diffMonth)/maxMonth * 20;
+      score+= (maxMonth-diffMonth)/maxMonth * 15;
     } else {
       score -= 10;
     }
@@ -463,26 +458,33 @@ function compareAlbums(discogs, compare, nbAlbumsToCompare) {
   fs.appendFileSync(__dirname+"/res/"+filename, "nb tracks = " + score +"\n" , 'utf-8')
 
   if (discogs.album.artists && discogs.album.artists.length > 0 && compare.artists && compare.artists.length > 0) {
-    let nbSameArtist = 0;
-    const artists = discogs.album.artists.map(a => utils.removeParentheses(a.name.toUpperCase()));
-    compare.artists.map(a => a.name.toUpperCase()).forEach(artistToCompare => {
-      if(artists.includes(artistToCompare)) {
-        nbSameArtist++;
+    const discogsArtists = discogs.album.artists.map(a => utils.removeParentheses(a.name.toUpperCase()));
+    const compareArtists = compare.artists.map(a => utils.removeParentheses(a.name.toUpperCase()));
+    var discogsNbSameArtist = 0;
+    var compareNbSameArtist = 0;
+
+    for (let i = 0; i < discogsArtists.length; i++) {
+      for (let j = 0; j < compareArtists.length; j++) {
+        if ( discogsArtists[i].includes(compareArtists[j]) ) compareNbSameArtist++;
+        if ( compareArtists[j].includes(discogsArtists[i]) ) discogsNbSameArtist++;
       }
-    })
-    if (nbSameArtist === 0) {
+    }
+
+    if (discogsNbSameArtist + compareNbSameArtist === 0) {
       if ( compare.artists.map(a=>a.name) == 'Various Artists' 
         || discogs.album.artists.map(a=>a.name) == 'Various Artists') {
         score+=20;
       } else {
-        score-=20;
+        score-=30;
       }
     } else {
-      const delta = Math.abs(discogs.album.artists.length - nbSameArtist);
-      score+= (compare.artists.length-delta)/compare.artists.length * 40; // check the number of same word in the artist name => 20%      
+      const discogsDelta = Math.abs(discogsArtists.length - discogsNbSameArtist);
+      const compareDelta = Math.abs(compareArtists.length - compareNbSameArtist);
+      score+= (discogsArtists.length-discogsDelta)/discogsArtists.length * 20; // check the number of same word in the artist name => 20%      
+      score+= (compareArtists.length-compareDelta)/compareArtists.length * 20; // check the number of same word in the artist name => 20%      
     }
   } else {
-    score -= 20;
+    score -= 30;
   }
 
   fs.appendFileSync(__dirname+"/res/"+filename, "same artists (final score) = " + score +"\n" , 'utf-8')

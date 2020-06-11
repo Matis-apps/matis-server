@@ -236,10 +236,6 @@ async function getFolderItems(token, secret, username, id) {
         var genres = [];
         if(collection && collection.length > 0) {
           const searchCollection = await DiscogsCollection.find({ 'discogs.album.id': collection.map(item => item.id) });
-          console.log('==============');
-          console.log(searchCollection);
-          console.log('==============');
-
           // Creating the list of genres
           var availableGenres = [];
           collection.forEach(i => {
@@ -442,6 +438,24 @@ function formatReleaseToStandard(release){
     }
   }
 
+  const regexYearOnly = new RegExp('^[0-9]{4}$');
+  const regexYearAndMonthOnly = new RegExp('^[0-9]{4}-[0-9]{2}$');
+  const regexYearAndMonthWrongDay = new RegExp('^[0-9]{4}-[0-9]{2}-00$');
+  const regexValidDate = new RegExp('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+
+  var formatedDate = release.released.trim();
+  if (release.released.match(regexYearOnly)) {
+    formatedDate = release.released + '-01-01';
+  } else if (release.released.match(regexYearAndMonthOnly)) {
+    formatedDate = release.released + '-01';
+  } else if (release.released.match(regexYearAndMonthWrongDay)) {
+    formatedDate = release.released.replace(new RegExp('00$'), '01');
+  }
+
+  if (!release.released.match(regexValidDate)) {
+    formatedDate = moment1().format('YYYY-MM-DD');
+  }
+
   return {
     _obj: 'release',
     _from: 'discogs',
@@ -456,7 +470,7 @@ function formatReleaseToStandard(release){
     artists: artists,
     tracks: release.tracklist.map(i => formatTrackToStandard(i)),
     nb_tracks: release.tracklist.length,
-    updated_at: release.released,
+    updated_at: formatedDate,
     added_at: release.date_added,
   };
 }
