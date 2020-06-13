@@ -39,7 +39,7 @@ const httpsCall = async function(options) {
 
         // Event when the request is ending
         response.on('end', () => {
-          //console.info('** RESPONSE ** : ' + options.hostname + options.path + ' : ' + response.statusCode + (responseBody ? ' => ' + responseBody.substr(0,50) + ' ...' : ''));
+          console.info('** RESPONSE ** : ' + options.hostname + options.path + ' : ' + response.statusCode + (responseBody ? ' => ' + responseBody.substr(0,50) + ' ...' : ''));
           try {
             let json = JSON.parse(responseBody)
             if (response.statusCode === 200) {
@@ -402,6 +402,14 @@ function formatTrackToStandard(track) {
     duration += parseInt(seconds) * 1000;
   }
 
+  var artists = [];
+  if (track.artists) {
+    Array.prototype.push.apply(artists, track.artists.map(artist => formatArtistToStandard(artist)));
+  }
+  if (track.extraartists) {
+    Array.prototype.push.apply(artists, track.extraartists.map(artist => formatArtistToStandard(artist)));
+  }
+
   return {
     _obj: 'track',
     _from: 'discogs',
@@ -411,7 +419,7 @@ function formatTrackToStandard(track) {
     isrc: null,
     duration: duration,
     link: null,
-    artists: track.artists && track.artists.length > 0 ? track.artists.map(a => formatArtistToStandard(a)) : []
+    artists: artists,
   }
 }
 
@@ -424,13 +432,18 @@ function formatReleaseToStandard(release){
       barcode = barcode.value.replace(regex,'');
     }
   }
-  let artists = [];
+  var artists = [];
   if (release.artists) {
     if (release.tracklist && release.tracklist.length > 0 && release.artists.map(a => a.name).includes('Various')) {
-      let various = [];
+      var various = [];
       for (let i = 0 ; i  < release.tracklist.length ; i++) {
         let track = release.tracklist[i];
-        Array.prototype.push.apply(various, track.artists.map(artist => formatArtistToStandard(artist)));
+        if (track.artists) {
+          Array.prototype.push.apply(various, track.artists.map(artist => formatArtistToStandard(artist)));
+        }
+        if (track.extraartists) {
+          Array.prototype.push.apply(various, track.extraartists.map(artist => formatArtistToStandard(artist)));
+        }
       }
       Array.prototype.push.apply(artists, various);
     } else {
