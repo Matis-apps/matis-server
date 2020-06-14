@@ -272,13 +272,13 @@ async function deezerSeachStrategy(strategy, discogsItem) {
     case 2:
       let tracks = discogsItem.tracks.slice(0, 8).map(track => {
         return {
-          artistName: track.artists[0] ? track.artists[0] : discogsArtistName,
+          artistName: track.artists[0] ? track.artists[0].name : discogsArtistName,
           trackName: track.name,
         };
       })
       deezerResult = await Promise.all(tracks.map(track => deezer.getSearch(track.artistName + ' ' + track.trackName, 'album')))
       if (deezerResult && deezerResult.length > 0) {
-        deezerResult = deezerResult.flat(1).filter(result => result.album).map(result => result.album);
+        deezerResult = deezerResult.flatMap(item => item.albums);
         return deezerResult;
       }
       break;
@@ -325,13 +325,13 @@ async function spotifySeachStrategy(strategy, spotify_token, discogsItem) {
     case 2:
       let tracks = discogsItem.tracks.slice(0, 8).map(track => {
         return {
-          artistName: track.artists[0] ? track.artists[0] : discogsArtistName,
+          artistName: track.artists[0] ? track.artists[0].name : discogsArtistName,
           trackName: track.name,
         };
       })
       spotifyResult = await Promise.all(tracks.map(track => spotify.getSearch(spotify_token, track.artistName + ' ' + track.trackName, 'album')))
       if (spotifyResult && spotifyResult.length > 0) {
-        spotifyResult = spotifyResult.flat(1).filter(result => result.album).map(result => result.album);
+        spotifyResult = spotifyResult.flatMap(item => item.albums);
         return spotifyResult;
       }
       break;
@@ -443,8 +443,8 @@ function compareAlbums(discogs, compare, nbAlbumsToCompare) {
   }
   fs.appendFileSync(__dirname+"/res/"+filename, "UPC = " + score +"\n" , 'utf-8')
 
-  console.log(compare)
-  console.log(discogs.album)
+  //console.log(compare)
+  //console.log(discogs.album)
 
   if (discogs.album.name.toUpperCase() === compare.name.toUpperCase()) { // check the name of the album => 50%
     score+=40;
@@ -494,8 +494,8 @@ function compareAlbums(discogs, compare, nbAlbumsToCompare) {
     } else {
       const deltaDiscogs = Math.abs(discogsNbWords - discogsNbSameWords);
       const deltaCompare = Math.abs(compareNbWords - compareNbSameWords);
-      score+= (discogsNbWords-deltaDiscogs)/discogsNbWords * 25; // check the number of same word in the album name => 25%
-      score+= (compareNbWords-deltaCompare)/compareNbWords * 20; // check the number of same word in the album name => 25%
+      score+= (discogsNbWords-deltaDiscogs)/discogsNbWords * 20; // check the number of same word in the album name => 25%
+      score+= (compareNbWords-deltaCompare)/compareNbWords * 25; // check the number of same word in the album name => 25%
     }
   }
 
