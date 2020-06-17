@@ -16,13 +16,25 @@ router.get('/me/folder/:id([0-9]+)', (req, res, next) => {
   }).catch(err => next(err));
 });
 
-router.post('/transfer/collection', require('../middleware/globalSpotify'), (req, res, next) => {
+router.post('/compatibility', require('../middleware/globalSpotify'), (req, res, next) => {
   const releases = req.body.releases;
   if (!releases) {
-    next(utils.error("Missing q parameter", 400));
+    next(utils.error("Missing releases parameter", 400));
   } else {
     const spotify_token = req.spotify_token;
-    discogs.getReleasesDetails(req.discogs_token, req.discogs_secret, releases, spotify_token).then(data => {
+    discogs.getReleasesDetails(req.discogs_token, req.discogs_secret, spotify_token, releases).then(data => {
+      res.status(200).json(data)
+    }).catch(err => next(err));
+  }  
+});
+
+router.post('/bug', require('../middleware/globalSpotify'), (req, res, next) => {
+  const release_id = req.body.release_id;
+  if (!release_id) {
+    next(utils.error("Missing release_id parameter", 400));
+  } else {
+    const spotify_token = req.spotify_token;
+    discogs.getReleaseBug(spotify_token, release_id).then(data => {
       res.status(200).json(data)
     }).catch(err => next(err));
   }  

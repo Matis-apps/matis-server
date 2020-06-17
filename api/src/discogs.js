@@ -287,7 +287,7 @@ async function getFolderItems(token, secret, username, id) {
 }
 
 
-function getReleasesDetails(token, secret, releasesJSON, spotify_token) {
+function getReleasesDetails(token, secret, spotify_token, releasesJSON) {
   return new Promise(async (resolve, reject) => {
     let releases = JSON.parse(releasesJSON);
     try {
@@ -306,7 +306,7 @@ function getReleasesDetails(token, secret, releasesJSON, spotify_token) {
 
         saveCollection(results)
           .then(() => {
-            tool.dispatchCompatibilityDiscogs(releases, spotify_token)          
+            tool.dispatchCompatibilityDiscogs(spotify_token, releases)          
             resolve(results)
           })
           .catch(err => {
@@ -314,6 +314,37 @@ function getReleasesDetails(token, secret, releasesJSON, spotify_token) {
           })
       } else {
         reject(utils.error('No items to insert' , 204))
+      }
+    } catch(err) {
+      reject(err)
+    }
+  })
+}
+
+function getReleaseBug(spotify_token, release_idJSON) {
+  return new Promise(async (resolve, reject) => {
+    let release_id = JSON.parse(release_idJSON);
+    try {
+      let savedRelease = await DiscogsCollection.findOne({ 'discogs.album.id': release_id });
+      if (savedRelease) {
+        tool.solveCompatibilityDiscogs(spotify_token, savedRelease)
+          .then(async (result) => {
+            try {
+              let fixedRelease = await DiscogsCollection.findOne({ 'discogs.album.id': release_id });
+              if (fixedRelease) {
+                resolve(fixedRelease) 
+              } else {
+                throw "Can't find the release that has been solved";
+              }
+            } catch(err) {
+              reject(utils.error(err.message||err, 500))
+            }
+          })
+          .catch(err => {
+            reject(err)
+          })
+      } else {
+        reject(utils.error('No item to solve' , 404))
       }
     } catch(err) {
       reject(err)
@@ -394,14 +425,6 @@ function formatArtistToStandard(artist) {
 }
 
 function formatTrackToStandard(track) {
-  let duration = 0;
-  if (track.duration) {
-    let minutes = track.duration.split(':')[0];
-    let seconds = track.duration.split(':')[1];
-    duration += parseInt(minutes) * 60 * 1000;
-    duration += parseInt(seconds) * 1000;
-  }
-
   var artists = [];
   if (track.artists) {
     Array.prototype.push.apply(artists, track.artists.map(artist => formatArtistToStandard(artist)));
@@ -417,7 +440,7 @@ function formatTrackToStandard(track) {
     id: null,
     name: track.name||track.title,
     isrc: null,
-    duration: duration,
+    duration: track.duration,
     link: null,
     artists: artists,
   }
@@ -506,4 +529,5 @@ exports.getMeAccount = getMeAccount;
 exports.getFolders = getFolders;
 exports.getFolderItems = getFolderItems;
 exports.getReleasesDetails = getReleasesDetails;
+exports.getReleaseBug = getReleaseBug;
 
