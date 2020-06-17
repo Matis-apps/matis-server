@@ -8,7 +8,7 @@ const retry_limit = 8; // Limit number of retry
 const retry_timeout = 1800; // Limit number of retry
 
 /**
- * httpsCall Call the API end parse de response
+ * httpsCall Call the API end parsel de response
  * @params options
  */
 function httpsCall(options) {
@@ -135,7 +135,7 @@ function recursiveHttps(access_token, path) {
         reject(utils.error("Waiting 1 minute and still no data ...", 500))
       }
     }, 60000) // 1 minutes
-    
+
     recursive()
   })
 }
@@ -153,12 +153,8 @@ function fetchArtists(access_token, user_id) {
   return new Promise((resolve, reject) => {
     const path = '/user/' + user_id + '/artists?access_token=' + access_token + '&';
     recursiveHttps(access_token, path)
-      .then(result => {
-        resolve(result)
-      })
-      .catch(error => {
-        reject(error)
-      })
+      .then(result => resolve(result))
+      .catch(error => reject(error))
   });
 }
 
@@ -170,19 +166,15 @@ function fetchArtist(access_token, id) {
   return new Promise((resolve, reject) => {
     const path = '/artist/' + id;
     genericHttps(access_token, path)
-      .then(result => {
-        return result
-      })
-      .then(async (artist) => {
-        await fetchArtistAlbums(access_token, id) // await for the response
+      .then(artist => {
+        fetchArtistAlbums(access_token, id) // await for the response
           .then(artistAlbums => {
             artist.albums = artistAlbums.sort((a,b) => sortAlbums(a,b));
             resolve(artist);
-          });
+          })
+          .catch(error => reject(error));
       })
-      .catch(error => {
-        reject(error)
-      });
+      .catch(error => reject(error));
   });
 }
 
@@ -195,12 +187,22 @@ function fetchArtistAlbums(access_token, artist_id) {
   return new Promise((resolve, reject) => {
     const path = '/artist/' + artist_id + '/albums?';
     recursiveHttps(access_token, path)
-      .then(artistAlbums => {
-        resolve(artistAlbums);
-      })
-      .catch(error => {
-        reject(error)
-      });
+      .then(result => resolve(result))
+      .catch(error => reject(error));
+  });
+}
+
+/**
+ * fetchRelatedArtists
+ * @params artist_id
+ * @params access_token
+ */
+function fetchRelatedArtists(access_token, artist_id) {
+  return new Promise((resolve, reject) => {
+    const path = '/artist/' + artist_id + '/related';
+    genericHttps(access_token, path)
+      .then(result => resolve(result))
+      .catch(error => reject(error));
   });
 }
 
@@ -213,9 +215,7 @@ function fetchAlbums(access_token, user_id = 'me') {
   return new Promise((resolve, reject) => {
     const path = '/user/' + user_id + '/albums?access_token=' + access_token + '&';
     recursiveHttps(access_token, path)
-      .then(result => {
-        resolve(result);
-      })
+      .then(result => resolve(result))
       .catch(error => reject(error));
   });
 }
@@ -228,9 +228,20 @@ function fetchAlbum(access_token, id) {
   return new Promise((resolve, reject) => {
     const path = '/album/'+id;
     genericHttps(access_token, path)
-      .then(result => {
-        resolve(result);
-      })
+      .then(result => resolve(result))
+      .catch(error => reject(error))
+  });
+}
+
+/**
+ * fetchAlbumTracks
+ * @params id
+ */
+function fetchAlbumTracks(access_token, id) {
+  return new Promise((resolve, reject) => {
+    const path = '/album/'+id+'/tracks?';
+    recursiveHttps(access_token, path)
+      .then(result => resolve(result))
       .catch(error => reject(error));
   });
 }
@@ -240,13 +251,11 @@ function fetchAlbum(access_token, id) {
  * @params user_id
  * @params access_token
  */
-function fetchPlaylists(access_token, user_id = 'me') {  
+function fetchPlaylists(access_token, user_id = 'me') {
   return new Promise((resolve, reject) => {
     const path = '/user/' + user_id + '/playlists?access_token=' + access_token + '&';
     recursiveHttps(access_token, path)
-      .then(result => {
-        resolve(result);
-      })
+      .then(result => resolve(result))
       .catch(error => reject(error));
   });
 }
@@ -259,9 +268,7 @@ function fetchPlaylist(access_token, id) {
   return new Promise((resolve, reject) => {
     const path = '/playlist/'+id;
     genericHttps(access_token, path)
-      .then(result => {
-        resolve(result);
-      })
+      .then(result => resolve(result))
       .catch(error => reject(error));
   });
 }
@@ -270,9 +277,7 @@ function fetchPlaylistContent(access_token, id) {
   return new Promise((resolve, reject) => {
     const path = '/playlist/'+id+'/tracks?';
     recursiveHttps(access_token, path)
-      .then(result => {
-        resolve(result);
-      })
+      .then(result => resolve(result))
       .catch(error => reject(error));
   });
 }
@@ -285,9 +290,7 @@ function fetchTrack(access_token, id) {
   return new Promise((resolve, reject) => {
     const path = '/track/'+id;
     genericHttps(access_token, path)
-      .then(result => {
-        resolve(result);
-      })
+      .then(result => resolve(result))
       .catch(error => reject(error));
   });
 }
@@ -301,9 +304,7 @@ function fetchFollowings(access_token, user_id) {
   return new Promise((resolve, reject) => {
     const path = '/user/' + user_id + '/followings?access_token=' + access_token + '&';
     recursiveHttps(access_token, path)
-      .then(result => {
-        resolve(result);
-      })
+      .then(result => resolve(result))
       .catch(error => reject(error));
   });
 }
@@ -317,9 +318,7 @@ function fetchFollowers(access_token, user_id) {
   return new Promise((resolve, reject) => {
     const path = '/user/' + user_id + '/followers?access_token=' + access_token + '&';
     recursiveHttps(access_token, path)
-      .then(result => {
-        resolve(result);
-      })
+      .then(result => resolve(result))
       .catch(error => reject(error));
   });
 }
@@ -328,9 +327,7 @@ function fetchSearch(type, query, strict) {
   return new Promise((resolve, reject) => {
     const path = '/search/'+type+'?q='+encodeURIComponent(query)+(strict == false ? '&sort=ranking':'');
     genericHttps(null, path)
-      .then(result => {
-        resolve(result);
-      })
+      .then(result => resolve(result))
       .catch(error => reject(error));
   });
 }
@@ -344,61 +341,44 @@ function fetchSearch(type, query, strict) {
  * @params user_id
  * @params access_token
  */
-function getArtists(access_token, user_id = 'me') {
-  return new Promise((resolve, reject) => {
-    fetchArtists(access_token, user_id)
-      .then(result => {
-        resolve(result.map(i => formatArtistToStandard(i)))
-      })
-      .catch(err => reject(err));
-  });
+async function getArtists(access_token, user_id = 'me') {
+  try {
+    const artists = await fetchArtists(access_token, user_id);
+    return artists
+      .map(artist => formatArtistToStandard(artist));
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
 /**
  * getArtist
  * @params id
  */
-function getArtist(access_token, id) {
-  return new Promise((resolve, reject) => {
-    fetchArtist(access_token, id)
-      .then(result => {
-        resolve(formatArtistToStandard(result))
-      })
-      .catch(err => reject(err));
-  });
+async function getArtist(access_token, artist_id) {
+  try {
+    const artist = await fetchArtist(access_token, artist_id);
+    return formatArtistToStandard(artist);
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
 /**
  * getRelatedArtists
  * @params id
  */
-function getRelatedArtists(access_token, id) {
-  return new Promise((resolve, reject) => {
-    const path = '/artist/' + id + '/related';
-    genericHttps(null, path)
-      .then(result => {
-        return result
-      })
-      .then(async (relatedArtists) => {
-        await Promise
-          .all(relatedArtists.data.map(i => fetchArtist(null, i.id)))
-          .then(results => {
-            var artists = [];
-            results.forEach(a => {
-              if (a && a.albums && a.albums.length > 0) {
-                artists.push(formatArtistToFeed(a));
-              }
-            })
-            artists.sort((a,b) => sortLastReleases(a,b));
-            return artists;
-          })
-          .then(relatedArtistsFormated =>  {
-            resolve(relatedArtistsFormated);
-          })
-          .catch(error => reject(error));
-      })
-      .catch(error => reject(error));
-  });
+async function getRelatedArtists(access_token, id) {
+  try {
+    var relatedArtistsList = await fetchRelatedArtists(access_token, id);
+    var relatedArtists = await Promise.all(relatedArtistsList.data.map(artist => fetchArtist(access_token, artist.id).catch(err => console.log(err))));
+    return relatedArtists
+      .filter(artist => artist && artist.album && artist.album.length > 0)
+      .map(artist => formatArtistToFeed(artist))
+      .sort((a,b) => sortLastReleases((a,b)));
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
 /**
@@ -406,15 +386,48 @@ function getRelatedArtists(access_token, id) {
  * @params user_id
  * @params access_token
  */
-function getAlbums(access_token, user_id = 'me') {
-  return new Promise((resolve, reject) => {
-    fetchAlbums(access_token, user_id)
-      .then(result => {
-        resolve(result.map(i => formatAlbumToFeed(i)))
-      })
-      .catch(err => reject(err));
-  });
+async function getAlbums(access_token, user_id = 'me') {
+  try {
+    var albums = await fetchAlbums(access_token, user_id);
+    return albums
+      .map(album => formatAlbumToFeed(album));
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
+
+/**
+ * getAlbumTracks
+ * @params user_id
+ * @params access_token
+ */
+async function getAlbumTracks(access_token, album_id) {
+  try {
+    var tracks = await fetchAlbumTracks(access_token, album_id);
+    return tracks
+      .map(track => formatTrackToStandard(
+        track,
+        { id: album_id, name: '' }
+      ))
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
+/**
+ * getAlbum
+ * @params user_id
+ * @params access_token
+ */
+async function getAlbum(access_token, album_id) {
+  try {
+    var album = await fetchAlbum(access_token, album_id);
+    return formatAlbumToStandard(album);
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
 
 /**
  * getMyReleases
@@ -423,97 +436,79 @@ function getAlbums(access_token, user_id = 'me') {
  */
 async function getMyReleases(access_token, user_id) {
   var releases = [];
-  var error;
+  var error = [];
 
-  const artists = await fetchArtists(access_token, 'me').catch(err => error = err);
+  const artists = await fetchArtists(access_token, 'me').catch(err => error.push(err));
   if(artists && artists.length > 0) {
-    await Promise
-      .all(artists.map(i => 
-        fetchArtist(access_token, i.id).catch(err => error = err))
-      )
-      .then(results => {
-        results.forEach(a => {
-          if (a && a.albums && a.albums.length > 0) {
-            releases.push(formatArtistToFeed(a));
-          }
-        })
-      }).catch(err => error = err);
+    var artistsDetails = await Promise.all(artists.map(i => fetchArtist(access_token, i.id).catch(err => error.push(err))))
+    Array.prototype.push.apply(
+      releases,
+      artistsDetails
+        .filter(artist => artist && artist.albums && artist.albums.length > 0)
+        .map(artist => formatArtistToFeed(artist))
+    )
   }
+
   var genres = [];
   genres.push({key: -42, value: "Tous"})
   if(releases && releases.length > 0) {
     var availableGenres = [...new Set(releases.map(i => i.content.genre))];
-    const call = await getGenres().catch(err => error = err);
+    const call = await getGenres().catch(err => error.push(err));
     if(call && call.length > 0) {
       availableGenres.forEach(item => {
-        let existingGenre = call.find(g => {
-          return g.id == item;
-        });
+        let existingGenre = call.find(g => g.id == item);
         if(existingGenre) {
-          genres.push({key: existingGenre.id, value: existingGenre.name}) 
+          genres.push({key: existingGenre.id, value: existingGenre.name})
         }
       })
     }
   }
   releases.genres = genres;
-  const playlists = await fetchPlaylists(access_token, 'me').catch(err => error = err);
+
+  const playlists = await fetchPlaylists(access_token, 'me').catch(err => error.push(err));
   if(playlists && playlists.length > 0) {
-    playlists.forEach(p => {
-      if(p && !p.is_loved_track && p.creator.id != user_id) {
-        releases.push(formatPlaylistToFeed(p));
-      }
-    });
+    Array.prototype.push.apply(
+      releases,
+      playlists
+        .filter(playlist => playlist && !playlist.is_loved_track && playlist.creator.id != user_id)
+        .map(playlist => formatPlaylistToFeed(playlist))
+    )
   }
 
   return new Promise((resolve, reject) => {
     if (releases.length == 0) {
-      if (error) {
-        reject(error);
+      if (error.length > 0) {
+        reject(error[error.length-1]);
       } else {
         reject(utils.error("No content"), 404);
       }
     } else {
-      releases.sort((a,b) => sortLastReleases(a,b));
-      resolve(releases)
+      resolve(releases.sort((a,b) => sortLastReleases(a,b)))
     }
   });
 }
 
-function getPlaylistArtistRelease(access_token, id) {
-  return new Promise((resolve, reject) => {
-    fetchPlaylistContent(access_token, id)
-      .then(results => {
-        var artists = []
-        results.forEach(item => {
-          let artist = item.artist;
-          existingArtist = artists.find(e => {
-            return e.id == artist.id;
-          })
-          if (!existingArtist) {
-            artists.push(artist)
-          }
-        })
-        return artists;
-      })
-      .then(async (artists) => {
-        var releases = []
-        await Promise
-          .all(artists.map(i => 
-            fetchArtist(access_token, i.id).catch(err => console.log(err)))
-          )
-          .then(results => {
-            results.forEach(a => {
-              if (a && a.albums && a.albums.length > 0) {
-                releases.push(formatArtistToFeed(a));
-              }
-            })
-          }).catch(err => reject(error));
 
-        releases.sort((a,b) => sortLastReleases(a,b));
-        resolve(releases);
-      })
-      .catch(error => reject(error));
-  });
+async function getPlaylistArtistRelease(access_token, id) {
+  try {
+    var playlists = await fetchPlaylistContent(access_token, id);
+    var artists = [];
+    playlists.forEach(item => {
+      let artist = item.artist;
+      var existingArtist = artists.find(testArtist => testArtist.id == artist.id)
+      if (!existingArtist) {
+        artists.push(artist)
+      }
+    })
+    var newReleases = await Promise.all(artists.map(i => fetchArtist(access_token, i.id).catch(err => console.log(err))));
+
+    return newReleases
+      .filter(release => release && release.albums && release.albums.length > 0)
+      .map(release => formatArtistToFeed(release))
+      .sort((a,b) => sortLastReleases(a,b));
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
 /**
@@ -523,72 +518,64 @@ function getPlaylistArtistRelease(access_token, id) {
  */
 async function getReleases(access_token, user_id) {
   var releases = [];
-  var error;
+  var error = [];
 
   const artists = await fetchArtists(access_token, user_id).catch(err => error = err);
   if(artists && artists.length > 0) {
-    await Promise
-      .all(artists.map(i => 
-        fetchArtist(access_token, i.id).catch(err => error = err))
-      )
-      .then(results => {
-        results.forEach(a => {
-          if (a && a.albums && a.albums.length > 0) {
-            releases.push(formatArtistToFeed(a));
-          }
-        })
-      }).catch(err => error = err);
+    var artistsDetails = await Promise.all(artists.map(i => fetchArtist(access_token, i.id).catch(err => error.push(err))))
+    Array.prototype.push.apply(
+      releases,
+      artistsDetails
+        .filter(artist => artist && artist.albums && artist.albums.length > 0)
+        .map(artist => formatArtistToFeed(artist))
+    )
   }
 
   var genres = [];
   genres.push({key: -42, value: "Tous"})
   if(artists && artists.length > 0) {
     var availableGenres = [...new Set(releases.map(i => i.content.genre))];
-    const call = await getGenres().catch(err => error = err);
+    const call = await getGenres().catch(err => error.push(err));
     if(call && call.length > 0) {
       availableGenres.forEach(item => {
         let existingGenre = call.find(g => {
           return g.id == item;
         });
         if(existingGenre) {
-          genres.push({key: existingGenre.id, value: existingGenre.name}) 
+          genres.push({key: existingGenre.id, value: existingGenre.name})
         }
       })
     }
   }
   releases.genres = genres;
 
-  const playlists = await fetchPlaylists(access_token, user_id).catch(err => error = err);
+  const playlists = await fetchPlaylists(access_token, user_id).catch(err => error.push(err));
   if(playlists && playlists.length > 0) {
-    playlists.forEach(p => {
-      releases.push(formatPlaylistToFeed(p));
-    });
+    Array.prototype.push.apply(
+      releases,
+      playlists.map(playlist => formatPlaylistToFeed(playlist))
+    );
   }
 
-  const albums = await fetchAlbums(access_token, user_id).catch(err => error = err);
+  const albums = await fetchAlbums(access_token, user_id).catch(err => error.push(err));
   if(albums && albums.length > 0) {
-
-    albums.forEach(a => {
-      let existingAlbum = releases.find(r => {
-        return r.content.id == a.id && r.content.type == a.record_type;
-      });
-
-      if (! existingAlbum) {
-        releases.push(formatAlbumToFeed(a));
-      }
-    });
+    Array.prototype.push.apply(
+      releases,
+      albums
+        .filter(album => !releases.map(release => release.content.type+'-'+release.content.id).includes(album.record_type+'-'+album.id))
+        .map(album => formatAlbumToFeed(album))
+    );
   }
 
   return new Promise((resolve, reject) => {
     if (releases.length == 0) {
-      if (error) {
-        reject(error);
+      if (error.length > 0) {
+        reject(error[error.length-1]);
       } else {
         reject(utils.error("No content"), 404);
       }
     } else {
-      releases.sort((a,b) => sortLastReleases(a,b));
-      resolve(releases)
+      resolve(releases.sort((a,b) => sortLastReleases(a,b)))
     }
   });
 }
@@ -601,15 +588,14 @@ async function getReleases(access_token, user_id) {
 function getReleaseContent(access_token, obj, id) {
   return new Promise((resolve, reject) => {
     if(obj === 'album') {
-      // retrieve the general content
       const promise = fetchAlbum(access_token, id)
         .then((response) => {
           resolve(formatAlbumToFeed(response));
         }).catch(err => reject(err));
     } else if (obj === 'playlist') {
       fetchPlaylist(access_token, id)
-        .then((response) => {       
-          resolve(formatPlaylistToFeed(response));          
+        .then((response) => {
+          resolve(formatPlaylistToFeed(response));
         }).catch(err => reject(err));
     } else {
       reject(utils.error('No content', 404))
@@ -707,7 +693,7 @@ async function getSearch(query, types = "*", strict = false) {
               await Promise
                 .all(result.data.map(i => fetchTrack(null, i.id).catch(err => error = err)))
                 .then(tracks => {
-                  results.tracks = tracks.map(i => formatTrackToStandard(i));
+                  results.tracks = tracks.map(i => formatTrackToStandard(i, null));
                 }).catch(err => error = err);
               break;
             case 'user':
@@ -836,8 +822,8 @@ function searchTrackISRC(query, isrc) {
             fullTracks = await Promise.all(tracks.data.map(i => fetchTrack(null, i.id)))
           } finally {
             if (fullTracks) {
-              track = fullTracks.filter(t => t.isrc == isrc);
-              track = track[0] ? formatTrackToStandard(track[0]) : null; 
+              track = fullTracks.find(t => t.isrc == isrc);
+              track = track ? formatTrackToStandard(track, null) : null;
             } else {
               throw utils.error("Invalid data", 500)
             }
@@ -935,7 +921,7 @@ function formatPlaylistToStandard(playlist){
   };
 }
 
-function formatTrackToStandard(track){
+function formatTrackToStandard(track, albumMeta){
   var artists = [];
   if (track.artist) {
     artists.push(formatArtistToStandard(track.artist));
@@ -944,6 +930,7 @@ function formatTrackToStandard(track){
       artists = [... contributors];
     }
   }
+
   return {
     _obj: 'track',
     _from: 'deezer',
@@ -956,7 +943,11 @@ function formatTrackToStandard(track){
     preview: track.preview,
     duration: track.duration ? timestampToTime(track.duration) : null,
     updated_at: track.time_add ? timestampToDate(track.time_add) : track.album ? track.album.release_date : null,
-    artist: artists
+    artist: artists,
+    album: {
+      id: track.album ? track.album.id : albumMeta ? albumMeta.id : null,
+      name: track.album ? track.album.title : albumMeta ? albumMeta.name : null,
+    }
   };
 }
 
@@ -1007,6 +998,7 @@ function formatArtistToFeed(artist){
 }
 
 function formatAlbumToFeed(album) {
+  console.log(album.tracks)
   return {
     _obj: 'album',
     _from: 'deezer',
@@ -1030,13 +1022,14 @@ function formatAlbumToFeed(album) {
       upc: album.upc || null,
       genre: album.genre_id,
       updated_at: album.release_date,
-      tracks: album.tracks ? album.tracks.data.map(i => formatTrackToStandard(i)) : null,
+      tracks: album.tracks ? album.tracks.data.map(i => formatTrackToStandard(i, {id: album.id, name: album.title})) : null,
       //last: album,
     },
   };
 }
 
 function formatPlaylistToFeed(playlist) {
+  console.log(playlist.tracks)
   return {
     _obj: 'playlist',
     _from: 'deezer',
@@ -1047,7 +1040,7 @@ function formatPlaylistToFeed(playlist) {
       name: playlist.creator.name,
       picture: null,
       link: "https://www.deezer.com/profile/" + playlist.creator.id,
-      added_at: playlist.time_add ? timestampToDate(playlist.time_add) : null, 
+      added_at: playlist.time_add ? timestampToDate(playlist.time_add) : null,
     },
     // Related to the content
     content: {
@@ -1059,10 +1052,10 @@ function formatPlaylistToFeed(playlist) {
       link: playlist.link,
       genre: null,
       updated_at: playlist.time_mod ? timestampToDate(playlist.time_mod)
-                : playlist.time_add ? timestampToDate(playlist.time_add) 
+                : playlist.time_add ? timestampToDate(playlist.time_add)
                 : playlist.tracks ? timestampToDate(Math.max.apply(null, playlist.tracks.data.map(i => i.time_add)))
-                : null, 
-      tracks: playlist.tracks ? playlist.tracks.data.map(i => formatTrackToStandard(i)) : null,
+                : null,
+      tracks: playlist.tracks ? playlist.tracks.data.map(i => formatTrackToStandard(i, null)) : null,
       //last: playlist,
     },
   };
@@ -1122,6 +1115,7 @@ exports.getArtists = getArtists;
 exports.getRelatedArtists = getRelatedArtists;
 exports.getArtist = getArtist;
 exports.fetchAlbums = fetchAlbums;
+exports.getAlbum = getAlbum;
 exports.getMyReleases = getMyReleases;
 exports.getReleases = getReleases;
 exports.getReleaseContent = getReleaseContent;
@@ -1133,3 +1127,4 @@ exports.searchAlbumUPC = searchAlbumUPC;
 exports.searchTrackISRC = searchTrackISRC;
 exports.getMyPlaylists = getMyPlaylists;
 exports.getPlaylistArtistRelease = getPlaylistArtistRelease;
+exports.getAlbumTracks = getAlbumTracks;
