@@ -943,7 +943,7 @@ function formatTrackToStandard(track, albumMeta){
     preview: track.preview,
     duration: track.duration ? timestampToTime(track.duration) : null,
     updated_at: track.time_add ? timestampToDate(track.time_add) : track.album ? track.album.release_date : null,
-    artist: artists,
+    artists: artists,
     album: {
       id: track.album ? track.album.id : albumMeta ? albumMeta.id : null,
       name: track.album ? track.album.title : albumMeta ? albumMeta.name : null,
@@ -998,7 +998,6 @@ function formatArtistToFeed(artist){
 }
 
 function formatAlbumToFeed(album) {
-  console.log(album.tracks)
   return {
     _obj: 'album',
     _from: 'deezer',
@@ -1029,7 +1028,6 @@ function formatAlbumToFeed(album) {
 }
 
 function formatPlaylistToFeed(playlist) {
-  console.log(playlist.tracks)
   return {
     _obj: 'playlist',
     _from: 'deezer',

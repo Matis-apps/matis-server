@@ -285,6 +285,19 @@ function fetchAlbum(access_token, id) {
 }
 
 /**
+ * fetchAlbumTracks
+ * @params id
+ */
+function fetchAlbumTracks(access_token, id) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/albums/'+id+'/tracks?';
+    recursiveHttps(access_token, path)
+      .then(result => resolve(result))
+      .catch(error => reject(error));
+  });
+}
+
+/**
  * fetchTrack
  * @params id
  */
@@ -313,6 +326,38 @@ async function getMeAccount(access_token) {
         reject(error)
       })
   });
+}
+
+/**
+ * getAlbum
+ * @params user_id
+ * @params access_token
+ */
+async function getAlbum(access_token, album_id) {
+  try {
+    var album = await fetchAlbum(access_token, album_id);
+    return formatAlbumToStandard(album);
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
+/**
+ * getAlbumTracks
+ * @params user_id
+ * @params access_token
+ */
+async function getAlbumTracks(access_token, album_id) {
+  try {
+    var tracks = await fetchAlbumTracks(access_token, album_id);
+    return tracks
+      .map(track => formatTrackToStandard(
+        track,
+        { id: album_id, name: '' }
+      ))
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
 async function getPlaylistArtistRelease(access_token, id) {
@@ -697,7 +742,6 @@ function formatPlaylistToStandard(playlist){
 }
 
 function formatTrackToStandard(trackItem, albumMeta){
-  console.log(trackItem)
   let track = trackItem.track||trackItem;
   return {
     _obj: 'track',
@@ -711,7 +755,7 @@ function formatTrackToStandard(trackItem, albumMeta){
     preview: track.preview_url,
     duration: track.duration_ms ? timestampToTime(track.duration_ms) : null,
     updated_at: track.album ? track.album.release_date : null,
-    artist: track.artists ? track.artists.map(i => formatArtistToStandard(i)) : track.track.artists.map(i => formatArtistToStandard(i)),
+    artists: track.artists ? track.artists.map(i => formatArtistToStandard(i)) : track.track.artists.map(i => formatArtistToStandard(i)),
     album: {
       id: track.album ? track.album.id : trackItem.album ? trackItem.album.id : albumMeta.id,
       name: track.album ? track.album.name : trackItem.album ? trackItem.album.name : albumMeta.name,
@@ -882,11 +926,12 @@ function timestampToDate(timestamp) {
 }
 
 function timestampToTime(seconds) {
-  return moment1.unix(seconds).format("mm:ss");
+  return moment1.unix(seconds/1000).format("mm:ss");
 }
 
 exports.getMeAccount = getMeAccount;
 exports.getSearch = getSearch;
+exports.getAlbum = getAlbum;
 exports.searchAlbumUPC = searchAlbumUPC;
 exports.searchTrackISRC = searchTrackISRC;
 exports.getMyReleases = getMyReleases;
@@ -894,3 +939,4 @@ exports.getReleaseContent = getReleaseContent;
 exports.getMyPlaylists = getMyPlaylists;
 exports.getPlaylistArtistRelease = getPlaylistArtistRelease;
 exports.getRelatedArtists = getRelatedArtists;
+exports.getAlbumTracks = getAlbumTracks;

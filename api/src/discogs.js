@@ -51,7 +51,7 @@ const httpsCall = async function(options) {
               }
             } else {
               if(json.message) {
-                console.error('Discogs : ', json.message)                
+                console.error('Discogs : ', json.message)
                 if (0 === response.headers['X-Discogs-Ratelimit-Remaining']) {
                   incrementStackTimeout();
                   reject(utils.error(json.message, 429));
@@ -83,7 +83,7 @@ function configureOptions(token, secret, path) {
     oauth_consumer_key: process.env.DISCOGS_CLIENT_ID,
     oauth_nonce: 'ABC' + timestamp,
     oauth_token: token,
-    oauth_token_secret: secret, 
+    oauth_token_secret: secret,
     oauth_signature: process.env.DISCOGS_CLIENT_SECRET + '&' + secret,
     oauth_signature_method: 'PLAINTEXT',
     oauth_timestamp: timestamp,
@@ -107,7 +107,7 @@ function genericHttps(token, secret, path) { // don't forget to call clearStackT
     var result = null;
     var error = null;
     var retry = retry_limit;
-    
+
     // get the general data of the artist
     do {
       let options = configureOptions(token, secret, path);
@@ -276,7 +276,7 @@ async function getFolderItems(token, secret, username, id) {
             return item;
           })
         }
-        collection.genres = genres;        
+        collection.genres = genres;
 
         resolve(collection)
       })
@@ -306,7 +306,7 @@ function getReleasesDetails(token, secret, spotify_token, releasesJSON) {
 
         saveCollection(results)
           .then(() => {
-            tool.dispatchCompatibilityDiscogs(spotify_token, releases)          
+            tool.dispatchCompatibilityDiscogs(spotify_token, releases)
             resolve(results)
           })
           .catch(err => {
@@ -332,7 +332,7 @@ function getReleaseBug(spotify_token, release_idJSON) {
             try {
               let fixedRelease = await DiscogsCollection.findOne({ 'discogs.album.id': release_id });
               if (fixedRelease) {
-                resolve(fixedRelease) 
+                resolve(fixedRelease)
               } else {
                 throw "Can't find the release that has been solved";
               }
@@ -354,11 +354,11 @@ function getReleaseBug(spotify_token, release_idJSON) {
 
 function saveCollection(results) {
   return DiscogsCollection.bulkWrite(
-    results.map((item) => 
+    results.map((item) =>
       ({
         updateOne: {
           filter: { 'discogs.album.id' : item.id },
-          update: { $set: { 
+          update: { $set: {
             discogs: {
               album: {
                 id: item.id,
@@ -382,7 +382,7 @@ function saveCollection(results) {
                   isrc: track.isrc,
                   duration: track.duration,
                   link: track.link,
-                  artists: track.artists,                    
+                  artists: track.artists,
                 }
               })
             }
@@ -420,7 +420,7 @@ function formatArtistToStandard(artist) {
     _uid: 'discogs-artist-'+artist.id,
     id: artist.id,
     name: artist.name,
-    link: 'https://www.discogs.com/artist/'+artist.id 
+    link: 'https://www.discogs.com/artist/'+artist.id
   }
 }
 
@@ -530,4 +530,3 @@ exports.getFolders = getFolders;
 exports.getFolderItems = getFolderItems;
 exports.getReleasesDetails = getReleasesDetails;
 exports.getReleaseBug = getReleaseBug;
-
