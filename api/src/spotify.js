@@ -1,12 +1,13 @@
 const https = require('https');
 const sleep = require('await-sleep');
-const moment1 = require('moment');
-const moment2 = require('moment-timezone');
+const moment = require('moment');
+const moment_timezone = require('moment-timezone');
 const utils = require('../../utils');
 
-const call_limit = 50; // Limit of items to retrieve
-const retry_limit = 10; // Limit number of retry
-const retry_timeout = 1800; // Limit number of retry
+const CALL_LIMIT = 50; // Limit of items to retrieve
+const RETRY_LIMIT = 10; // Limit number of retry
+const RETRY_TIMEOUT = 1800; // Limit number of retry
+const DIE_TIMEOUT = 10000;
 
 /**
  * httpsCall Call the API end parse de response
@@ -15,6 +16,7 @@ const retry_timeout = 1800; // Limit number of retry
 const httpsCall = async function(options) {
   return new Promise((resolve, reject) => {
     console.info('** REQUEST ** : ' + options.hostname + options.path);
+    setTimeout(() => reject(utils.error('Spotify : Timeout after 10s', 408)), DIE_TIMEOUT);
     var req = https.get(options, response => {
       // Event when receiving the data
       var responseBody = "";
@@ -36,8 +38,8 @@ const httpsCall = async function(options) {
           } else {
             if(json.error) {
               if (response.statusCode == 429) {
-                let retry_after = response.headers['retry-after'] ? response.headers['retry-after']*1000 : retry_timeout;
-                retry_after = retry_after < retry_timeout * 2 ? retry_after : retry_timeout;
+                let retry_after = response.headers['retry-after'] ? response.headers['retry-after']*1000 : RETRY_TIMEOUT;
+                retry_after = retry_after < RETRY_TIMEOUT * 2 ? retry_after : RETRY_TIMEOUT;
                 console.warn('** REACHED QUOTA ** retry : ' + retry_after);
                 reject(utils.error(retry_after, response.statusCode));
               } else {
@@ -65,7 +67,7 @@ function genericHttps(access_token, path) {
   return new Promise(async (resolve, reject) => {
     var result = null;
     var error = null;
-    var retry = retry_limit;
+    var retry = RETRY_LIMIT;
 
     // get the general data of the artist
     do {
@@ -88,13 +90,9 @@ function genericHttps(access_token, path) {
       }
     } while (!result && retry > 0); // loop while there is another page
 
-    if (result) {
-      resolve(result);
-    } else if (error) {
-      reject(error);
-    } else {
-      reject(utils.error("Something went wrong..."));
-    }
+    if (result) resolve(result);
+    else if (error) reject(error);
+    else reject(utils.error("Something went wrong..."));
   })
 }
 
@@ -106,11 +104,11 @@ function recursiveHttps(access_token, path) {
      * @params index
      * @params retry
      */
-    let recursive = async function (index = 0, retry = retry_limit) {
+    let recursive = async function (index = 0, retry = RETRY_LIMIT) {
       // Configuration of the https request
       const options = {
         hostname: 'api.spotify.com',
-        path: path + 'offset=' + index + '&limit='+call_limit,
+        path: path + 'offset=' + index + '&limit='+CALL_LIMIT,
         method: 'GET',
         headers: {
           'Authorization': 'Bearer '+access_token,
@@ -124,7 +122,7 @@ function recursiveHttps(access_token, path) {
         if (Object.keys(response).includes('items')) {
           Array.prototype.push.apply(result, response.items)
           if(response.next) { // if has a next object, keep going
-            recursive(index+call_limit)
+            recursive(index+CALL_LIMIT)
               .catch(() => resolve(result)); // resolve the iterations if an error happens
           } else { // no more page, resolve with the result
             resolve(result);
@@ -135,7 +133,7 @@ function recursiveHttps(access_token, path) {
           if (Object.keys(response[itemMainKey]).includes('items')) {
             Array.prototype.push.apply(result, response[itemMainKey].items)
             if(response[itemMainKey].next) { // if has a next object, keep going
-              recursive(index+call_limit)
+              recursive(index+CALL_LIMIT)
                 .catch(() => resolve(result)); // resolve the iterations if an error happens
             } else { // no more page, resolve with the result
               resolve(result);
@@ -154,11 +152,8 @@ function recursiveHttps(access_token, path) {
     };
 
     setTimeout(() => {
-      if (result.length > 0) {
-        resolve(result)
-      } else {
-        reject(utils.error("Waiting 1 minute and still no data ...", 500))
-      }
+      if (result.length > 0) resolve(result);
+      else reject(utils.error("Waiting 1 minute and still no data ...", 500));
     }, 60000) // 1 minutes
 
     recursive()
@@ -231,18 +226,14 @@ function fetchArtist(access_token, id) {
   return new Promise((resolve, reject) => {
     const path = '/v1/artists/' + id;
     genericHttps(access_token, path)
-      .then(artist => {
-        if(!artist) throw mutils.error('No artist configured', 500);
-        fetchArtistAlbums(access_token, id) // await for the response
-          .then(artistAlbums => {
-            artist.albums = artistAlbums.sort((a,b) => sortAlbums(a,b));
-            resolve(artist);
-          })
-          .catch(error => reject(error));
-      })
-      .catch(error => {
-        reject(error)
-      });
+    .then(artist => {
+      if(!artist) throw utils.error('No artist', 404);
+      fetchArtistAlbums(access_token, id)
+      .then(artistAlbums => {
+        artist.albums = artistAlbums.sort((a,b) => sortAlbums(a,b));
+        resolve(artist);
+      }).catch(error => reject(error));
+    }).catch(error => reject(error));
   });
 }
 
@@ -277,9 +268,7 @@ function fetchAlbum(access_token, id) {
   return new Promise((resolve, reject) => {
     const path = '/v1/albums/'+id;
     genericHttps(access_token, path)
-      .then(result => {
-        resolve(result);
-      })
+      .then(result => resolve(result))
       .catch(error => reject(error));
   });
 }
@@ -305,9 +294,7 @@ function fetchTrack(access_token, id) {
   return new Promise((resolve, reject) => {
     const path = '/v1/tracks/'+id;
     genericHttps(access_token, path)
-      .then(result => {
-        resolve(result);
-      })
+      .then(result => resolve(result))
       .catch(error => reject(error));
   });
 }
@@ -319,12 +306,8 @@ async function getMeAccount(access_token) {
   return new Promise((resolve, reject) => {
     const path = '/v1/me';
     genericHttps(access_token, path)
-      .then(result => {
-        resolve(result)
-      })
-      .catch(error => {
-        reject(error)
-      })
+      .then(result => resolve(result))
+      .catch(error => reject(error))
   });
 }
 
@@ -353,7 +336,7 @@ async function getAlbumTracks(access_token, album_id) {
     return tracks
       .map(track => formatTrackToStandard(
         track,
-        { id: album_id, name: '' }
+        { albumId: album_id, albumName: '' }
       ))
   } catch (err) {
     return Promise.reject(err);
@@ -364,15 +347,15 @@ async function getPlaylistArtistRelease(access_token, id) {
   try {
     var playlist = await fetchPlaylistContent(access_token, id);
     var artists = []
-    results.forEach(item => {
-      item.track.artists.forEach(artist => {
-        let existingArtist = artists.find(testArtist => testArtist.id == artist.id)
-        if (!existingArtist) {
-          artists.push(artist)
-        }
-      })
+    playlist.forEach(item => {
+      if (item && item.track && item.track.artists) {
+        item.track.artists.forEach(artist => {
+          let existingArtist = artists.find(testArtist => testArtist.id == artist.id)
+          if (!existingArtist) artists.push(artist)
+        })
+      }
     })
-    var newReleases = await Promise.all(artists.map(i => fetchArtist(access_token, i.id).catch(err => console.log(err))))
+    var newReleases = await Promise.all(artists.map(i => fetchArtist(access_token, i.id).catch(err => { throw err; })))
     return [... new Set(newReleases)]
       .filter(release => release && release.albums && release.albums.length > 0)
       .map(release => formatArtistToFeed(release))
@@ -404,14 +387,10 @@ async function getSearch(access_token, query, types = "*", strict = false) {
   var results = new Object;
   var error = null;
 
-  if (types == "*") {
-    search_types = allowedTypes;
-  } else {
-    if (types.includes(",")) {
-      search_types = allowedTypes.filter(i => types.split(",").includes(i));
-    } else {
-      search_types = allowedTypes.filter(item => item == types);
-    }
+  if (types == "*") search_types = allowedTypes;
+  else {
+    if (types.includes(",")) search_types = allowedTypes.filter(i => types.split(",").includes(i));
+    else search_types = allowedTypes.filter(item => item == types);
   }
 
   if (search_types.length > 0) {
@@ -419,9 +398,7 @@ async function getSearch(access_token, query, types = "*", strict = false) {
       await fetchSearch(access_token, type, query, strict)
         .then(async (result) => {
           var itemMainKey = Object.keys(result)[0];
-          if (strict && result[itemMainKey].items) {
-            result[itemMainKey].items = result[itemMainKey].items.filter(item => query.toUpperCase().includes(item.name.toUpperCase()));
-          }
+          if (strict && result[itemMainKey].items) result[itemMainKey].items = result[itemMainKey].items.filter(item => query.toUpperCase().includes(item.name.toUpperCase()));
           switch(type) {
             case 'artist':
               results.artists = result.artists.items.map(i => formatArtistToStandard(i));
@@ -441,7 +418,7 @@ async function getSearch(access_token, query, types = "*", strict = false) {
               await Promise
                 .all(result.tracks.items.map(i => fetchTrack(access_token, i.id).catch(err => error = err)))
                 .then(tracks => {
-                  results.tracks = tracks.map(i => formatTrackToStandard(i, null));
+                  results.tracks = tracks.map(i => formatTrackToStandard(i));
                 }).catch(err => error = err);
               break;
           }
@@ -472,7 +449,7 @@ function searchAlbumUPC(access_token, query, upc) {
     var album = null;
     var error = null;
     var index = 0;
-    var limit = call_limit; // improve the performances due to fullAlbums.filter
+    var limit = CALL_LIMIT; // improve the performances due to fullAlbums.filter
     var total = limit;
 
     var albums, fullAlbums;
@@ -504,13 +481,9 @@ function searchAlbumUPC(access_token, query, upc) {
       }
     } while (!album && total > index)
 
-    if (album) {
-      resolve(album)
-    } else if (error) {
-      reject(error)
-    } else {
-      reject(utils.error("Not found", 200))
-    }
+    if (album) resolve(album)
+    else if (error) reject(error)
+    else reject(utils.error("Not found", 200))
   });
 }
 
@@ -520,7 +493,7 @@ function searchTrackISRC(access_token, query, isrc) {
     var track = null;
     var error = null;
     var index = 0;
-    var limit = call_limit/2; // improve the performances due to fullAlbums.filter
+    var limit = CALL_LIMIT/2; // improve the performances due to fullAlbums.filter
     var total = limit;
 
     var tracks, fullTracks;
@@ -538,7 +511,7 @@ function searchTrackISRC(access_token, query, isrc) {
           } finally {
             if (fullTracks) {
               track = fullTracks.find(a => a.external_ids.isrc == isrc);
-              track = track ? formatTrackToStandard(track, null) : null;
+              track = track ? formatTrackToStandard(track) : null;
             } else {
               throw utils.error("Invalid data", 500)
             }
@@ -553,13 +526,9 @@ function searchTrackISRC(access_token, query, isrc) {
       }
     } while (!track && total > index)
 
-    if (track) {
-      resolve(track)
-    } else if (error) {
-      reject(error)
-    } else {
-      reject(utils.error("Not found", 200))
-    }
+    if (track) resolve(track)
+    else if (error) reject(error)
+    else reject(utils.error("Not found", 404))
   });
 }
 
@@ -643,31 +612,35 @@ async function getMyReleases(access_token, username) {
  * @params obj
  * @params id
  */
-function getReleaseContent(access_token, obj, id) {
-  return new Promise((resolve, reject) => {
+async function getReleaseContent(access_token, obj, id) {
+  try {
     if(obj === 'album') {
-      // retrieve the general content
-      const promise = fetchAlbum(access_token, id)
-        .then((response) => {
-          resolve(formatAlbumToFeed(response));
-        }).catch(err => reject(err));
+      var album = await fetchAlbum(access_token, id);
+      if (album) return formatAlbumToFeed(album);
+      else throw utils.error('No album', 404);
     } else if (obj === 'playlist') {
-      fetchPlaylist(access_token, id)
-        .then((response) => {
-          resolve(formatPlaylistToFeed(response));
-        }).catch(err => reject(err));
+      var playlist = await fetchPlaylist(access_token, id);
+      if (playlist) {
+        playlist = formatPlaylistToFeed(playlist);
+        var tracks = await fetchPlaylistContent(access_token, id);
+        if (tracks) playlist.content.tracks = tracks.map(track => formatTrackToStandard(track));
+        return playlist;
+      } else {
+        throw utils.error('No playlist', 404);
+      }
     } else {
-      reject(utils.error('No content', 404))
+      throw utils.error('Not supported release object', 400);
     }
-  });
+  } catch(err) {
+    return Promise.reject(err);
+  }
 }
 
 function getMyPlaylists(access_token) {
   return new Promise((resolve, reject) => {
     fetchPlaylists(access_token)
-    .then((response) => {
-      resolve(response.map(i => formatPlaylistToStandard(i)))
-    }).catch(err => reject(err));
+      .then((response) => resolve(response.map(i => formatPlaylistToStandard(i))))
+      .catch(err => reject(err));
   });
 }
 
@@ -679,9 +652,7 @@ function getGenres(access_token) {
   return new Promise((resolve, reject) => {
     const path = '/v1/recommendations/available-genre-seeds';
     genericHttps(access_token, path)
-      .then(result => {
-        resolve(result);
-      })
+      .then(result => resolve(result))
       .catch(error => reject(error));
   });
 }
@@ -719,7 +690,7 @@ function formatAlbumToStandard(album){
     link: album.external_urls.spotify ? album.external_urls.spotify : "https://open.spotify.com/album/"+album.id,
     upc: album.external_ids ? album.external_ids.upc : null,
     nb_tracks: album.total_tracks,
-    artists: album.artists.map(i => formatArtistToStandard(i)),
+    artists: album.artists && album.artists.length > 0 ? album.artists.map(i => formatArtistToStandard(i)) : [],
     updated_at: album.release_date,
     added_at: null,
   };
@@ -741,7 +712,7 @@ function formatPlaylistToStandard(playlist){
   };
 }
 
-function formatTrackToStandard(trackItem, albumMeta){
+function formatTrackToStandard(trackItem, { albumId = -1, albumName = '<Undefined>' } = {}){
   let track = trackItem.track||trackItem;
   return {
     _obj: 'track',
@@ -757,8 +728,8 @@ function formatTrackToStandard(trackItem, albumMeta){
     updated_at: track.album ? track.album.release_date : null,
     artists: track.artists ? track.artists.map(i => formatArtistToStandard(i)) : track.track.artists.map(i => formatArtistToStandard(i)),
     album: {
-      id: track.album ? track.album.id : trackItem.album ? trackItem.album.id : albumMeta.id,
-      name: track.album ? track.album.name : trackItem.album ? trackItem.album.name : albumMeta.name,
+      id: track.album ? track.album.id : trackItem.album ? trackItem.album.id : albumId,
+      name: track.album ? track.album.name : trackItem.album ? trackItem.album.name : albumName,
     }
   };
 }
@@ -773,7 +744,7 @@ function formatUserToStandard(user){
     name: user.display_name,
     profile: user.external_urls.spotify,
     fullname: null,
-    picture: user.images[0] ? user.images[0].url : null,
+    picture: user.images && user.images.length > 0 ? user.images[0].url : null,
   };
 }
 
@@ -781,71 +752,75 @@ function formatUserToStandard(user){
 // FORMAT TO FEED (RELEASE) //
 //////////////////////////////
 function formatArtistToFeed(artist){
-  const firstAlbum = artist.albums[0];
-  const firstArtistAlbum = artist.albums[0].artists[0];
-
-  return {
-    _obj: 'album',
-    _from: 'spotify',
-    _uid: 'spotify-'+firstAlbum.album_type+'-'+artist.id+'-'+artist.albums[0].id,
-    // Related to the author
-    author: {
-      id: firstArtistAlbum.id,
-      name: firstArtistAlbum.name,
-      picture:
-      firstArtistAlbum.images && firstArtistAlbum.images.length > 0 ? firstArtistAlbum.images[0].url : firstAlbum.images[0] ? firstAlbum.images[0].url : null,
-      link: firstArtistAlbum.external_urls.spotify ? firstArtistAlbum.external_urls.spotify :  "https://open.spotify.com/artist/"+artist.id,
-      added_at: null,
-    },
-    // Related to the content
-    content: {
-      id: firstAlbum.id,
-      title: firstAlbum.name,
-      description: 'Based on your feed with ' + artist.name,
-      type: firstAlbum.album_type,
-      picture: firstAlbum.images[0] ? firstAlbum.images[0].url : null,
-      link: firstAlbum.external_urls.spotify,
-      upc: firstAlbum.upc || null,
-      genre: artist.genres ? artist.genres.join(':') : '',
-      updated_at: firstAlbum.release_date,
-      //last: artist.albums[0],
-    }
-  };
+  if (artist.albums && artist.albums.length > 0 && artist.albums.artists && artist.albums.artists.length > 0) {
+    const firstAlbum = artist.albums[0];
+    const firstArtistAlbum = artist.albums[0].artists[0];
+    return {
+      _obj: 'album',
+      _from: 'spotify',
+      _uid: 'spotify-'+firstAlbum.album_type+'-'+artist.id+'-'+artist.albums[0].id,
+      // Related to the author
+      author: {
+        id: firstArtistAlbum.id,
+        name: firstArtistAlbum.name,
+        picture:
+        firstArtistAlbum.images && firstArtistAlbum.images.length > 0 ? firstArtistAlbum.images[0].url : firstAlbum.images[0] ? firstAlbum.images[0].url : null,
+        link: firstArtistAlbum.external_urls.spotify ? firstArtistAlbum.external_urls.spotify :  "https://open.spotify.com/artist/"+artist.id,
+        added_at: null,
+      },
+      // Related to the content
+      content: {
+        id: firstAlbum.id,
+        title: firstAlbum.name,
+        description: 'Based on your feed with ' + artist.name,
+        type: firstAlbum.album_type,
+        picture: firstAlbum.images[0] ? firstAlbum.images[0].url : null,
+        link: firstAlbum.external_urls.spotify,
+        upc: firstAlbum.upc || null,
+        genre: artist.genres ? artist.genres.join(':') : '',
+        updated_at: firstAlbum.release_date,
+        //last: artist.albums[0],
+      }
+    };
+  }
+  return;
 }
 
 function formatAlbumToFeed(album) {
-  const mainArtist = album.artists[0];
-  return {
-    _obj: 'album',
-    _from: 'spotify',
-    _uid: 'spotify-'+album.album_type+'-'+mainArtist.id+'-'+album.id,
-    // Related to the author
-    author: {
-      id: mainArtist.id,
-      name: mainArtist.name,
-      picture: mainArtist.images && mainArtist.images.length > 0 ? mainArtist.images[0].url : null,
-      link: mainArtist.external_urls.spotify,
-      added_at: null,
-    },
-    // Related to the content
-    content: {
-      id: album.id,
-      title: album.name,
-      description: 'Based on an album you liked',
-      type: album.album_type,
-      picture: album.images && album.images.length > 0 ? album.images[0].url : null,
-      link: album.external_urls.spotify,
-      upc: album.external_ids.upc || null,
-      genre: album.genres.join(':') ? mainArtist.genres.join(':') : '',
-      updated_at: album.release_date,
-      tracks: album.tracks ? album.tracks.items.map(i => formatTrackToStandard(i, {id: album.id, name: album.name})) : null,
-      //last: album,
-    },
-  };
+  if (album.artists && album.artists.length > 0) {
+    const mainArtist = album.artists[0];
+    return {
+      _obj: 'album',
+      _from: 'spotify',
+      _uid: 'spotify-'+album.album_type+'-'+mainArtist.id+'-'+album.id,
+      // Related to the author
+      author: {
+        id: mainArtist.id,
+        name: mainArtist.name,
+        picture: mainArtist.images && mainArtist.images.length > 0 ? mainArtist.images[0].url : null,
+        link: mainArtist.external_urls.spotify,
+        added_at: null,
+      },
+      // Related to the content
+      content: {
+        id: album.id,
+        title: album.name,
+        description: 'Based on an album you liked',
+        type: album.album_type,
+        picture: album.images && album.images.length > 0 ? album.images[0].url : null,
+        link: album.external_urls.spotify,
+        upc: album.external_ids.upc || null,
+        genre: album.genres.join(':') ? mainArtist.genres.join(':') : '',
+        updated_at: album.release_date,
+        tracks: album.tracks ? album.tracks.items.map(i => formatTrackToStandard(i, { albumId: album.id, albumName: album.name })) : null,
+        //last: album,
+      },
+    };
+  }
+  return;
 }
 
 function formatPlaylistToFeed(playlist) {
-
   return {
     _obj: 'playlist',
     _from: 'spotify',
@@ -869,7 +844,7 @@ function formatPlaylistToFeed(playlist) {
       genre: '',
       updated_at: playlist.tracks && playlist.tracks.items ? timestampToDate(Math.max.apply(null, playlist.tracks.items.map(i => timezoneToTimestamp(i.added_at))))
                 : null,
-      tracks: playlist.tracks && playlist.tracks.items ? playlist.tracks.items.map(i => formatTrackToStandard(i, null)) : null,
+      tracks: playlist.tracks && playlist.tracks.items ? playlist.tracks.items.map(i => formatTrackToStandard(i)) : null,
       //last: playlist,
     },
   };
@@ -879,54 +854,39 @@ function formatPlaylistToFeed(playlist) {
 // UTILITIES //
 ///////////////
 function sortLastReleases ( a, b ) {
-  if ( a.content.updated_at == null ) return 1;
-  if ( b.content.updated_at == null ) return -1;
-
-  if ( a.content.updated_at > b.content.updated_at ) {
-    return -1;
-  }
-  if ( a.content.updated_at < b.content.updated_at ) {
-    return 1;
-  }
+  if ( a.content == null || a.content.updated_at == null ) return 1;
+  if ( b.content == null || b.content.updated_at == null ) return -1;
+  if ( a.content.updated_at > b.content.updated_at ) return -1;
+  if ( a.content.updated_at < b.content.updated_at ) return 1;
   return 0;
 }
 
 function sortAlbums ( a, b ) {
   if ( a.release_date == null ) return 1;
   if ( b.release_date == null ) return -1;
-
-  if ( a.release_date > b.release_date ) {
-    return -1;
-  }
-  if ( a.release_date < b.release_date ) {
-    return 1;
-  }
+  if ( a.release_date > b.release_date ) return -1;
+  if ( a.release_date < b.release_date ) return 1;
   return 0;
 }
 
 function sortFriends ( a, b ) {
   if ( a.name == null ) return -1;
   if ( b.name == null ) return 1;
-
-  if ( utils.capitalize(a.name) > utils.capitalize(b.name) ) {
-    return 1;
-  }
-  if ( utils.capitalize(a.name) < utils.capitalize(b.name) ) {
-    return -1;
-  }
+  if ( utils.capitalize(a.name) > utils.capitalize(b.name) ) return 1;
+  if ( utils.capitalize(a.name) < utils.capitalize(b.name) ) return -1;
   return 0;
 }
 
 function timezoneToTimestamp(timezone) {
-  return moment2.tz(timezone,'Europe/Paris').unix();
+  return moment_timezone.tz(timezone,'Europe/Paris').unix();
 }
 
 function timestampToDate(timestamp) {
-  return moment1.unix(timestamp).format("YYYY-MM-DD");
+  return moment.unix(timestamp).format("YYYY-MM-DD");
 }
 
 function timestampToTime(seconds) {
-  return moment1.unix(seconds/1000).format("mm:ss");
+  return moment.unix(seconds/1000).format("mm:ss");
 }
 
 exports.getMeAccount = getMeAccount;

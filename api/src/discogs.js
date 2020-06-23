@@ -1,22 +1,23 @@
 const https = require('https');
-const moment1 = require('moment');
-const moment2 = require('moment-timezone');
+const moment = require('moment');
+const moment_timezone = require('moment-timezone');
 const sleep = require('await-sleep');
 const utils = require('../../utils');
 const tool = require('./tool');
 const DiscogsCollection = require('mongoose').model('DiscogsCollection');
 
 
-const call_limit = 100; // Limit of items to retrieve
-const retry_limit = 10; // Limit number of retry
-const retry_timeout = 1800; // Limit number of retry
+const CALL_LIMIT = 100; // Limit of items to retrieve
+const RETRY_LIMIT = 10; // Limit number of retry
+const RETRY_TIMEOUT = 1800; // Limit number of retry
 
-var stack_timeout = 0;
-const stack_timeout_between = 1000;
+var STACK_TIMEOUT = 0;
+const STACK_TIMEOUT_INTERVAL = 1000;
+const DIE_TIMEOUT = 10000;
 
-const incrementStackTimeout = () => stack_timeout+=stack_timeout_between;
-const decrementStackTimeout = () => stack_timeout = stack_timeout > stack_timeout_between ? stack_timeout-=stack_timeout_between : stack_timeout_between;
-const clearStackTimeout = () => stack_timeout=0;
+const incrementStackTimeout = () => STACK_TIMEOUT+=STACK_TIMEOUT_INTERVAL;
+const decrementStackTimeout = () => STACK_TIMEOUT = STACK_TIMEOUT > STACK_TIMEOUT_INTERVAL ? STACK_TIMEOUT-=STACK_TIMEOUT_INTERVAL : STACK_TIMEOUT_INTERVAL;
+const clearStackTimeout = () => STACK_TIMEOUT=0;
 
 /**
  * httpsCall Call the API end parse de response
@@ -28,10 +29,11 @@ const httpsCall = async function(options) {
     let wait = setTimeout(() => {
       clearTimeout(wait);
       calling();
-    }, stack_timeout)
+    }, STACK_TIMEOUT)
 
     let calling = () => {
       console.info('** REQUEST ** : ' + options.hostname + options.path);
+      setTimeout(() => reject(utils.error('Discogs : Timeout after 10s', 408)), DIE_TIMEOUT);
       https.get(options, response => {
         // Event when receiving the data
         var responseBody = "";
@@ -106,7 +108,7 @@ function genericHttps(token, secret, path) { // don't forget to call clearStackT
   return new Promise(async (resolve, reject) => {
     var result = null;
     var error = null;
-    var retry = retry_limit;
+    var retry = RETRY_LIMIT;
 
     // get the general data of the artist
     do {
@@ -115,18 +117,14 @@ function genericHttps(token, secret, path) { // don't forget to call clearStackT
         result = await httpsCall(options) // await for the response
       } catch(err) {
         error = err;
-        if(error.code == 429) retry-- && await sleep(retry_timeout);// code 429 == quota limit
+        if(error.code == 429) retry-- && await sleep(RETRY_TIMEOUT);// code 429 == quota limit
         else retry = 0;
       }
     } while (!result && retry > 0); // loop while there is another page
 
-    if (result) {
-      resolve(result);
-    } else if (error) {
-      reject(error);
-    } else {
-      reject(utils.error("Something went wrong..."));
-    }
+    if (result) resolve(result);
+    else if (error) reject(error);
+    else reject(utils.error("Something went wrong..."));
   })
 }
 
@@ -139,10 +137,10 @@ function recursiveHttps(token, secret, path) {
      * @params page
      * @params retry
      */
-    let recursive = async function (page = 1, retry = retry_limit) {
+    let recursive = async function (page = 1, retry = RETRY_LIMIT) {
       // Configuration of the https request
 
-      let recursivePath = path + 'page=' + page + '&per_page=' + call_limit;
+      let recursivePath = path + 'page=' + page + '&per_page=' + CALL_LIMIT;
       let options = configureOptions(token, secret, recursivePath);
 
       try {
@@ -158,7 +156,7 @@ function recursiveHttps(token, secret, path) {
         }
       } catch(error) {
         if (retry > 0 && error.code == 429) { // too many request and still have a retry, so wait for a delay and get back
-          setTimeout(recursive, retry_timeout, page, retry-1);
+          setTimeout(recursive, RETRY_TIMEOUT, page, retry-1);
         } else {
           reject(utils.error(error.message || 'Something went wrong...', error.code || 500));
         }
@@ -173,12 +171,8 @@ async function fetchReleaseDetails(token, secret, id) {
   return new Promise((resolve, reject) => {
     const path = '/releases/'+id;
     genericHttps(token, secret, path)
-      .then(result => {
-        resolve(result)
-      })
-      .catch(error => {
-        reject(error)
-      })
+      .then(result => resolve(result))
+      .catch(error => reject(error));
   });
 }
 
@@ -189,12 +183,8 @@ async function getIdentity(token, secret) {
   return new Promise((resolve, reject) => {
     const path = '/oauth/identity';
     genericHttps(token, secret, path)
-      .then(result => {
-        resolve(result)
-      })
-      .catch(error => {
-        reject(error)
-      })
+      .then(result => resolve(result))
+      .catch(error => reject(error));
   });
 }
 
@@ -202,12 +192,8 @@ async function getMeAccount(token, secret, username) {
   return new Promise((resolve, reject) => {
     const path = '/users/' + username;
     genericHttps(token, secret, path)
-      .then(result => {
-        resolve(result)
-      })
-      .catch(error => {
-        reject(error)
-      })
+      .then(result => resolve(result))
+      .catch(error => reject(error));
   });
 }
 
@@ -215,12 +201,8 @@ async function getFolders(token, secret, username) {
   return new Promise((resolve, reject) => {
     const path = '/users/' + username + '/collection/folders';
     genericHttps(token, secret, path)
-      .then(result => {
-        resolve(result)
-      })
-      .catch(error => {
-        reject(error)
-      })
+      .then(result => resolve(result))
+      .catch(error => reject(error))
   });
 }
 
@@ -245,34 +227,25 @@ async function getFolderItems(token, secret, username, id) {
           genres.unshift("Tous");
 
           var key = 0;
-          genres = genres.map(i => new Object({
-            key: ++key,
-            value: i,
-          }))
+          genres = genres.map(i => new Object({ key: ++key, value: i }))
 
           // Updating the list with the formated genres
           collection = collection.map(item => {
             var formated = [];
             item.basic_information.genres.forEach(i => {
-              let existingGenre = genres.find(g => {
-                return g.value == i;
-              })
-              if (existingGenre) {
-                formated.push(existingGenre);
-              }
+              let existingGenre = genres.find(genre => genre.value == i)
+              if (existingGenre) formated.push(existingGenre);
             });
             item = formatVinyleToStandard(item)
             item.genres = formated;
 
-            let savedItem = searchCollection.find(itemInCollection => itemInCollection.discogs.album.id == item.id);
+            let savedItem = searchCollection.find(itemInCollection => itemInCollection.discogs.album.id == item.album.id);
             if (savedItem) {
               item.offline = true;
               item.spotify = savedItem.spotify;
               item.deezer = savedItem.deezer;
-            } else {
-              item.offline = false;
             }
-
+            else item.offline = false;
             return item;
           })
         }
@@ -287,69 +260,57 @@ async function getFolderItems(token, secret, username, id) {
 }
 
 
-function getReleasesDetails(token, secret, spotify_token, releasesJSON) {
-  return new Promise(async (resolve, reject) => {
+async function getReleasesDetails(token, secret, spotify_token, releasesJSON) {
+  try {
     let releases = JSON.parse(releasesJSON);
-    try {
-      let savedReleases = await DiscogsCollection.find({ 'discogs.album.id': releases }, { 'discogs.album.id': 1 });
-      if (savedReleases) {
-        savedReleases = savedReleases.map(obj => obj.discogs.album.id);
-        releases = releases.filter(id => !savedReleases.includes(id));
-      }
+    const query = { $and: [
+      { 'discogs.album.id':releases },
+      { spotify: { $exists: true, $ne: null } },
+      { deezer : { $exists: true, $ne: null } }
+    ] };
 
-      if (releases.length > 0) {
-        clearStackTimeout();
-        const maxSizeToHandle = 60;
-        let results = await Promise.all(releases.slice(0, maxSizeToHandle).map(id => fetchReleaseDetails(token, secret, id).catch(err => console.log(err))))
+    let savedReleases = await DiscogsCollection.find(query, { 'discogs.album.id': 1 });
+
+    if (savedReleases) {
+      savedReleases = savedReleases.map(obj => obj.discogs.album.id);
+      releases = releases.filter(id => !savedReleases.includes(id));
+    }
+
+    if (releases.length > 0) {
+      clearStackTimeout();
+      const maxSizeToHandle = 60;
+      let results = await Promise.all(releases.slice(0, maxSizeToHandle).map(id => fetchReleaseDetails(token, secret, id).catch(err => console.log(err))))
+      if (results && results.length > 0) {
         results = results.filter(i => !!i).map(i => formatReleaseToStandard(i));
-
-
         saveCollection(results)
           .then(() => {
-            tool.dispatchCompatibilityDiscogs(spotify_token, releases)
-            resolve(results)
-          })
-          .catch(err => {
-            reject(err)
-          })
-      } else {
-        reject(utils.error('No items to insert' , 204))
+            tool.dispatchCompatibilityDiscogs(spotify_token, releases) //TODO: Explore the different ways to trigger this action
+            return results;
+          }).catch(err => { throw err; })
       }
-    } catch(err) {
-      reject(err)
+      else throw utils.error('Releases not found' , 404);
     }
-  })
+    else throw utils.error('No items to insert' , 204);
+  } catch(err) {
+    return Promise.reject(err);
+  }
 }
 
-function getReleaseBug(spotify_token, release_idJSON) {
-  return new Promise(async (resolve, reject) => {
-    let release_id = JSON.parse(release_idJSON);
-    try {
-      let savedRelease = await DiscogsCollection.findOne({ 'discogs.album.id': release_id });
-      if (savedRelease) {
-        tool.solveCompatibilityDiscogs(spotify_token, savedRelease)
-          .then(async (result) => {
-            try {
-              let fixedRelease = await DiscogsCollection.findOne({ 'discogs.album.id': release_id });
-              if (fixedRelease) {
-                resolve(fixedRelease)
-              } else {
-                throw "Can't find the release that has been solved";
-              }
-            } catch(err) {
-              reject(utils.error(err.message||err, 500))
-            }
-          })
-          .catch(err => {
-            reject(err)
-          })
-      } else {
-        reject(utils.error('No item to solve' , 404))
-      }
-    } catch(err) {
-      reject(err)
+async function getReleaseBug(spotify_token, release_idJSON) {
+  try {
+    const release_id = JSON.parse(release_idJSON);
+    const query = { 'discogs.album.id': release_id };
+    const savedRelease = await DiscogsCollection.findOne(query);
+    if (savedRelease) {
+      await tool.solveCompatibilityDiscogs(spotify_token, savedRelease)
+      const fixedRelease = await DiscogsCollection.findOne(query);
+      if (fixedRelease) return fixedRelease;
+      else throw utils.error("Can't find the release that has been solved", 404);
     }
-  })
+    else throw utils.error('No item to be solved', 404);
+  } catch(err) {
+    return Promise.reject(err);
+  }
 }
 
 function saveCollection(results) {
@@ -357,17 +318,17 @@ function saveCollection(results) {
     results.map((item) =>
       ({
         updateOne: {
-          filter: { 'discogs.album.id' : item.id },
-          update: { $set: {
+          filter: { 'discogs.album.id' : item.album.id },
+          update: {
             discogs: {
               album: {
-                id: item.id,
-                name: item.name,
-                release_date: item.updated_at,
-                link: item.link,
-                upc: item.upc,
-                nb_tracks: item.nb_tracks,
-                artists: item.artists.map(artist => {
+                id: item.album.id,
+                name: item.album.name,
+                release_date: item.album.release_date,
+                link: item.album.link,
+                upc: item.album.upc,
+                nb_tracks: item.album.nb_tracks,
+                artists: item.album.artists.map(artist => {
                   return {
                     id: artist.id,
                     name: artist.name,
@@ -375,7 +336,7 @@ function saveCollection(results) {
                   }
                 })
               },
-              tracks: item.tracks.map(track => {
+              tracks: item.tracks && item.tracks. length > 0 ? item.tracks.map(track => {
                 return {
                   id: track.id,
                   name: track.name,
@@ -384,10 +345,10 @@ function saveCollection(results) {
                   link: track.link,
                   artists: track.artists,
                 }
-              })
+              }) : [],
             }
-          }},
-          upsert: true
+          },
+          upsert: true,
         }
       })
     )
@@ -400,15 +361,18 @@ function formatVinyleToStandard(album){
     _obj: 'vinyle',
     _from: 'discogs',
     _uid: 'discogs-vinyle-'+albumInfo.id,
-    // Related to the author
-    id: albumInfo.id,
-    name: albumInfo.title,
     type: 'vinyle',
-    picture: albumInfo.cover_image,
-    link: "https://www.discogs.com/release/"+albumInfo.id,
-    upc: null,
-    artists: albumInfo.artists,
-    updated_at: albumInfo.year,
+    // Related to the author
+    album: {
+      id: albumInfo.id,
+      name: albumInfo.title,
+      release_date: albumInfo.year,
+      picture: albumInfo.cover_image,
+      link: "https://www.discogs.com/release/"+albumInfo.id,
+      upc: null,
+      artists: albumInfo.artists.map(artist => formatArtistToStandard(artist)),
+    },
+    tracks: [],
     added_at: album.date_added,
   };
 }
@@ -426,12 +390,8 @@ function formatArtistToStandard(artist) {
 
 function formatTrackToStandard(track) {
   var artists = [];
-  if (track.artists) {
-    Array.prototype.push.apply(artists, track.artists.map(artist => formatArtistToStandard(artist)));
-  }
-  if (track.extraartists) {
-    Array.prototype.push.apply(artists, track.extraartists.map(artist => formatArtistToStandard(artist)));
-  }
+  if (track.artists) Array.prototype.push.apply(artists, track.artists.map(artist => formatArtistToStandard(artist)));
+  if (track.extraartists) Array.prototype.push.apply(artists, track.extraartists.map(artist => formatArtistToStandard(artist)));
 
   return {
     _obj: 'track',
@@ -488,25 +448,25 @@ function formatReleaseToStandard(release){
     formatedDate = release.released.replace(new RegExp('00$'), '01');
   }
 
-  if (!release.released.match(regexValidDate)) {
-    formatedDate = moment1().format('YYYY-MM-DD');
-  }
+  if (!release.released.match(regexValidDate)) formatedDate = moment().format('YYYY-MM-DD');
 
   return {
     _obj: 'release',
     _from: 'discogs',
     _uid: 'discogs-release-'+release.id,
-    // Related to the author
-    id: release.id,
-    name: release.title,
     type: 'release',
-    picture: null,
-    link: release.uri,
-    upc: barcode,
-    artists: artists,
+    // Related to the author
+    album : {
+      id: release.id,
+      name: release.title,
+      release_date: formatedDate,
+      picture: null,
+      link: release.uri||'https://www.discogs.com/release/'+release.id,
+      upc: barcode,
+      nb_track: release.tracklist.length,
+      artists: artists,
+    },
     tracks: release.tracklist.map(i => formatTrackToStandard(i)),
-    nb_tracks: release.tracklist.length,
-    updated_at: formatedDate,
     added_at: release.date_added,
   };
 }
@@ -514,13 +474,8 @@ function formatReleaseToStandard(release){
 function sortReleases(a, b) {
   if ( a.date_added == null ) return 1;
   if ( b.date_added == null ) return -1;
-
-  if ( a.date_added > b.date_added ) {
-    return -1;
-  }
-  if ( a.date_added < b.date_added ) {
-    return 1;
-  }
+  if ( a.date_added > b.date_added ) return -1;
+  if ( a.date_added < b.date_added ) return 1;
   return 0;
 }
 
