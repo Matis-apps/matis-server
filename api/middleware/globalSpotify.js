@@ -26,7 +26,7 @@ module.exports = async (req, res, next) => {
     req.spotify_id = -1;
     req.spotify_username = 'Matis';
     req.spotify_token = access_token; // By default
-    
+
     await refreshSpotify(refresh_token)
       .then(config => {
         req.spotify_token = config.value;
@@ -107,7 +107,7 @@ function saveConfig(json) {
       }
     }
     catch (err) {
-      reject(mutils.error(err, 500))
+      reject(utils.error(err, 500))
     }
   })
 }
