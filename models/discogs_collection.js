@@ -13,7 +13,7 @@ const compatibilityObject = {
     release_date: String,
     picture: String,
     link: String,
-    upc: Number,
+    upc: String,
     nb_tracks: Number,
     artists: [artistObject],
   },
@@ -21,7 +21,7 @@ const compatibilityObject = {
     id: String,
     name: String,
     isrc: Number,
-    duration: Number,
+    duration: String,
     link: String,
     artists: [artistObject],
   }]
@@ -29,9 +29,17 @@ const compatibilityObject = {
 
 const DiscogsCollectionSchema = new mongoose.Schema({
     //user : { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    discogs: Object, // compatibilityObject
-    deezer: Object,
-    spotify: Object,
+    discogs: compatibilityObject,
+    deezer: {type: {...
+      [compatibilityObject],
+      validity_score: Number,
+      validity_percent: String,
+    }, required: false},
+    spotify: {type: {...
+      [compatibilityObject],
+      validity_score: Number,
+      validity_percent: String,
+    }, required: false},
 });
 
 mongoose.model('DiscogsCollection', DiscogsCollectionSchema);
