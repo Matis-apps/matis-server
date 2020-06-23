@@ -7,6 +7,8 @@ const fs = require('fs');
 var util = require('util');
 const filenameAlbumScore = __dirname+"/res/score-album.txt";
 const filenameTrackScore = __dirname+"/res/score-track.txt";
+const NB_SEARCH_STRATEGY = 6;
+const DIE_TIMEOUT = 30000;
 
 function crossAlbumUPC (spotify_token, fromPlateform, query, upc) {
   return new Promise(async (resolve, reject) => {
@@ -187,15 +189,11 @@ function unifySearch(result) {
 }
 
 function sortResults ( a, b ) {
-  if ( a[0] == null ) return -1;
-  if ( b[0] == null ) return 1;
+  if ( a[0] == null || a[0].updated_at == null ) return -1;
+  if ( b[0] == null || b[0].updated_at == null) return 1;
 
-  if ( a[0].updated_at > b[0].updated_at ) {
-    return -1;
-  }
-  if ( a[0].updated_at < b[0].updated_at ) {
-    return 1;
-  }
+  if ( a[0].updated_at > b[0].updated_at ) return -1;
+  if ( a[0].updated_at < b[0].updated_at ) return 1;
   return 0;
 }
 
@@ -306,11 +304,11 @@ async function deezerSeachStrategy(strategy, discogsItem) {
       }
       break;
     case 6: // sarch from the tracks
-      deezerResult = await Promise.all(tracks.map(track => deezer.getSearch(track.artistName + ' ' + track.trackName, 'track')))
+      deezerResult = await Promise.all(tracks.slice(0, 15).map(track => deezer.getSearch(track.artistName + ' ' + track.trackName, 'track')))
       if (deezerResult && deezerResult.length > 0) {
         deezerResult = deezerResult.flatMap(item => item.tracks);
-        deezerResult = [...new Set(deezerResult.map(track => track.album.id))]
-        deezerResult = await Promise.all(deezerResult.map(albumID => deezer.getAlbum(null, albumID)))
+        deezerResult = [...new Set(deezerResult.filter(track => !!track && !!track.album && !!track.album.id).map(track => track.album.id))];
+        deezerResult = await Promise.all(deezerResult.map(albumID => deezer.getAlbum(null, albumID).catch(err => console.error(err))))
         if (deezerResult && deezerResult.length > 0) {
           return deezerResult;
         }
@@ -369,11 +367,11 @@ async function spotifySeachStrategy(strategy, spotify_token, discogsItem) {
       break;
 
     case 6: // sarch from the tracks
-        spotifyResult = await Promise.all(tracks.map(track => spotify.getSearch(spotify_token, track.artistName + ' ' + track.trackName, 'track')))
+        spotifyResult = await Promise.all(tracks.slice(0, 15).map(track => spotify.getSearch(spotify_token, track.artistName + ' ' + track.trackName, 'track')))
         if (spotifyResult && spotifyResult.length > 0) {
           spotifyResult = spotifyResult.flatMap(item => item.tracks);
-          spotifyResult = [... new Set(spotifyResult.map(track => track.album.id))]
-          spotifyResult = await Promise.all(spotifyResult.map(albumID => spotify.getAlbum(spotify_token, albumID)))
+          spotifyResult = [... new Set(spotifyResult.filter(track => !!track && track.album && !!track.album.id).map(track => track.album.id))]
+          spotifyResult = await Promise.all(spotifyResult.map(albumID => spotify.getAlbum(spotify_token, albumID).catch(err => console.error(err))))
           if (spotifyResult && spotifyResult.length > 0) {
             return spotifyResult;
           }
@@ -390,80 +388,114 @@ async function spotifySeachStrategy(strategy, spotify_token, discogsItem) {
 async function dispatchCompatibilityDiscogs(spotify_token, releases) {
   try {
     let searchCollection = await DiscogsCollection.find({ 'discogs.album.id': releases });
-
     fs.writeFileSync(filenameAlbumScore, "====== SCORE =====\n", 'utf-8')
 
     await utils.asyncForEach(searchCollection, async (item) => {
-
       const discogsItem = item.discogs;
-
+      console.log(discogsItem.album.name)
       fs.appendFileSync(filenameAlbumScore, discogsItem.album.name + "\n");
-
       // Deezer bloc
-      if (!item.deezer) {
-        let strategy = 1, deezerResult;
-        do {
-          fs.appendFileSync(filenameAlbumScore, "  Deezer strategy: " + strategy + "\n");
-          deezerResult = await deezerSeachStrategy(strategy, discogsItem);
-          strategy++;
-        } while(!await checkResults(discogsItem, 'deezer', deezerResult, compareAlbums) && strategy < 6)
-      }
+      let deezerCompatibility = new Promise(async(resolve, reject) => {
+        setTimeout(() => reject(utils.error('Timeout after 30s', 408)), DIE_TIMEOUT);
+        try {
+          let strategy = 1, deezerResult, matched = false;
+          if (!item.deezer) {
+            do {
+              fs.appendFileSync(filenameAlbumScore, "  Deezer strategy: " + strategy + "\n");
+              deezerResult = await deezerSeachStrategy(strategy, discogsItem);
+              strategy++;
+              matched = await checkResults(discogsItem, 'deezer', deezerResult, compareAlbums);
+            } while(!matched && strategy <= NB_SEARCH_STRATEGY);
+          }
+          resolve(matched);
+        } catch(err) {
+          reject(err);
+        }
+      });
 
       // Spotify bloc
-      if (!item.spotify) {
-        let strategy = 1, spotifyResult;
-        do {
-          fs.appendFileSync(filenameAlbumScore, "  Spotify strategy: " + strategy + "\n");
-          spotifyResult = await spotifySeachStrategy(strategy, spotify_token, discogsItem);
-          strategy++;
-        } while(!await checkResults(discogsItem, 'spotify', spotifyResult, compareAlbums) && strategy < 6)
-      }
+      let spotifyCompatibility = new Promise(async(resolve, reject) => {
+        setTimeout(() => reject(utils.error('Timeout after 30s', 408)), DIE_TIMEOUT);
+        try {
+          let strategy = 1, spotifyResult, matched = false;
+          if (!item.spotify) {
+            do {
+              fs.appendFileSync(filenameAlbumScore, "  Spotify strategy: " + strategy + "\n");
+              spotifyResult = await spotifySeachStrategy(strategy, spotify_token, discogsItem);
+              strategy++;
+              matched = await checkResults(discogsItem, 'spotify', spotifyResult, compareAlbums);
+            } while(!matched && strategy <= NB_SEARCH_STRATEGY)
+          }
+          resolve(matched);
+        } catch(err) {
+          reject(err);
+        }
+      });
+
+      await Promise.all([deezerCompatibility, spotifyCompatibility]).catch(err => console.log(err));
     })
   } catch (err) {
     console.error(err);
   }
-  console.log('dispatchCompatibilityDiscogs done')
+  console.log('!!! dispatchCompatibilityDiscogs done !!!')
 }
 
 async function solveCompatibilityDiscogs(spotify_token, release) {
   const discogsItem = release.discogs;
 
   try {
+    let s1 = await DiscogsCollection.find({ 'discogs.album.id': discogsItem.album.id });
     await DiscogsCollection.update(
-      { 'discogs.album.id': discogsItem.id  },
+      { 'discogs.album.id': discogsItem.album.id  },
       { $unset : {'spotify': 1, 'deezer': 1} },
     );
+    let s2 = await DiscogsCollection.find({ 'discogs.album.id': discogsItem.album.id });
   } catch (err) {
     return Promise.reject(err);
   }
-
   fs.writeFileSync(filenameTrackScore, "====== SCORE =====\n", 'utf-8')
+  const filename = __dirname+ '/res/' + discogsItem.album.name.replace(new RegExp('[ /.]', 'g'), '') + '.txt';
 
-  let filename = __dirname+ '/res/' + discogsItem.album.name.replace(new RegExp('[ /.]', 'g'), '') + '.txt';
-  fs.writeFileSync(filename, "   Deezer)\n", 'utf-8')
+  let deezerCompatibility  = new Promise(async(resolve, reject) => {
+    setTimeout(() => reject(utils.error('Timeout after 30s', 408)), DIE_TIMEOUT);
+    try {
+      fs.writeFileSync(filename, "   Deezer)\n", 'utf-8')
+      var deezerResult = await deezerSeachStrategy(6, discogsItem);
+      deezerResult = deezerResult.filter(album => !!album && !!album.id);
+      const deezerResultTracks = await Promise.all(deezerResult.map(album => deezer.getAlbumTracks(null, album.id)));
+      for (let i = 0; i < deezerResultTracks.length; i++) {
+        deezerResult[i].tracks = deezerResultTracks[i];
+      }
+      var resDeezer = await checkResults(discogsItem, 'deezer', deezerResult, compareTracks)
+      resolve(resDeezer);
+    } catch (err) {
+      reject(err);
+    }
+  });
 
-  var deezerResult = await deezerSeachStrategy(6, discogsItem);
-  var deezerResultTracks = await Promise.all(deezerResult.map(album => deezer.getAlbumTracks(null, album.id)));
-  for (let i = 0; i < deezerResultTracks.length; i++) {
-    deezerResult[i].tracks = deezerResultTracks[i];
-  }
-  var resDeezer = await checkResults(discogsItem, 'deezer', deezerResult, compareTracks)
-  console.log("Deezer result : " + resDeezer);
-
-  fs.appendFileSync(filename, "   Spotify)\n", 'utf-8')
-  var spotifyResult = await spotifySeachStrategy(6, spotify_token, discogsItem);
-  var spotifyResultTracks = await Promise.all(spotifyResult.map(album => spotify.getAlbumTracks(spotify_token, album.id)));
-  for (let i = 0; i < spotifyResultTracks.length; i++) {
-    spotifyResult[i].tracks = spotifyResultTracks[i];
-  }
-  var resSpotify = await checkResults(discogsItem, 'spotify', spotifyResult, compareTracks)
-  console.log("Spotify result : " + resSpotify);
+  let spotifyCompatibility  = new Promise(async(resolve, reject) => {
+    setTimeout(() => reject(utils.error('Timeout after 30s', 408)), DIE_TIMEOUT);
+    try {
+      fs.appendFileSync(filename, "   Spotify)\n", 'utf-8')
+      var spotifyResult = await spotifySeachStrategy(6, spotify_token, discogsItem);
+      spotifyResult = spotifyResult.filter(album => !!album && !!album.id);
+      const spotifyResultTracks = await Promise.all(spotifyResult.map(album => spotify.getAlbumTracks(spotify_token, album.id)));
+      for (let i = 0; i < spotifyResultTracks.length; i++) {
+        spotifyResult[i].tracks = spotifyResultTracks[i];
+      }
+      var resSpotify = await checkResults(discogsItem, 'spotify', spotifyResult, compareTracks)
+      resolve(resSpotify);
+    } catch(err) {
+      reject(err);
+    }
+  });
+  await Promise.all([deezerCompatibility, spotifyCompatibility]);
 }
 
 async function checkResults(discogsItem, from, results, compareFunction) {
   let winner,
       weHaveAWinner = false,
-      bestScore = 75;
+      bestScore = 74;
 
   for (let i = 0; i < results.length; i++) {
     let toCompare = results[i];
@@ -483,7 +515,7 @@ async function checkResults(discogsItem, from, results, compareFunction) {
       fs.appendFileSync(filenameTrackScore, "\n");
     }
   }
-  if (weHaveAWinner && winner) {
+  if (weHaveAWinner) {
     await saveCollection(discogsItem.album.id, from, winner, bestScore);
   }
   return weHaveAWinner;
@@ -496,88 +528,84 @@ function compareAlbums(discogs, compare, nbAlbumsToCompare) {
   //fs.appendFileSync(__dirname+"/res/"+filename, "compare=\n")
   //fs.appendFileSync(__dirname+"/res/"+filename, util.inspect(compare) , 'utf-8')
 
-  if (utils.isSameUPC(discogs.album.upc, compare.upc)) { // check the upc
-    score+=100;
-  }
+  if (discogs.album.upc && compare.upc && utils.isSameUPC(discogs.album.upc, compare.upc)) score+=100;
+
   //fs.appendFileSync(__dirname+"/res/"+filename, "UPC = " + score +"\n" , 'utf-8')
-  if (discogs.album.name.toUpperCase() === compare.name.toUpperCase()) { // check the name of the album => 50%
-    score+=40;
-  } else {
-    const regexEP = new RegExp(' (EP|ep|Ep)$');
-    const regexNoneAlphaNum = /[^\p{L}0-9]/gu;
-    const regexOneOrSeveralSpace = new RegExp(' +', 'g');
+  if (discogs.album && discogs.album.name && compare.name) {
+    if (discogs.album.name.toUpperCase() === compare.name.toUpperCase()) { // check the name of the album => 50%
+      score+=40;
+    } else {
+      const regexEP = new RegExp(' (EP|ep|Ep)$');
+      const regexNoneAlphaNum = /[^\p{L}0-9]/gu;
+      const regexOneOrSeveralSpace = new RegExp(' +', 'g');
 
-    const discogsWords = discogs.album.name
-      .replace(regexEP, '')
-      .replace(regexNoneAlphaNum, ' ')
-      .toUpperCase()
-      .trim()
-      .split(regexOneOrSeveralSpace).
-      filter(i => i && i.length > 0);
-    const discogsNbWords = discogsWords.length;
-    var discogsNbSameWords = 0;
+      const discogsWords = discogs.album.name
+        .replace(regexEP, '')
+        .replace(regexNoneAlphaNum, ' ')
+        .toUpperCase()
+        .trim()
+        .split(regexOneOrSeveralSpace).
+        filter(i => i && i.length > 0);
+      const discogsNbWords = discogsWords.length;
+      var discogsNbSameWords = 0;
 
-    const compareWords = compare.name
-      .replace(regexEP, '')
-      .replace(regexNoneAlphaNum, ' ')
-      .toUpperCase()
-      .trim()
-      .split(regexOneOrSeveralSpace)
-      .filter(i => i && i.length > 0);;
-    const compareNbWords = compareWords.length;
-    var compareNbSameWords = 0;
+      const compareWords = compare.name
+        .replace(regexEP, '')
+        .replace(regexNoneAlphaNum, ' ')
+        .toUpperCase()
+        .trim()
+        .split(regexOneOrSeveralSpace)
+        .filter(i => i && i.length > 0);;
+      const compareNbWords = compareWords.length;
+      var compareNbSameWords = 0;
 
-    for (let i = 0; i < discogsWords.length; i++) {
-      for (let j = 0; j < compareWords.length; j++) {
-        let discogsWord = discogsWords[i];
-        let compareWord = compareWords[j];
-        if ( discogsWord === compareWord ) {
-          compareNbSameWords+=1;
-          discogsNbSameWords+=1;
-          break;
-        } else {
-          if ( discogsWord.includes(compareWord) && compareWord.length/discogsWord.length > 0.2 ) {
-            compareNbSameWords+=0.5;
+      for (let i = 0; i < discogsWords.length; i++) {
+        for (let j = 0; j < compareWords.length; j++) {
+          let discogsWord = discogsWords[i];
+          let compareWord = compareWords[j];
+          if ( discogsWord === compareWord ) {
+            compareNbSameWords+=1;
+            discogsNbSameWords+=1;
             break;
-          }
-          if ( compareWord.includes(discogsWord) && discogsWord.length/compareWord.length > 0.2) {
-            discogsNbSameWords+=0.5;
-            break;
+          } else {
+            if ( discogsWord.includes(compareWord) && compareWord.length/discogsWord.length > 0.2 ) {
+              compareNbSameWords+=0.5;
+              break;
+            }
+            if ( compareWord.includes(discogsWord) && discogsWord.length/compareWord.length > 0.2) {
+              discogsNbSameWords+=0.5;
+              break;
+            }
           }
         }
       }
-    }
 
-    const compareName = compare.name.toUpperCase();
-    for (let  i= 0; i < discogs.tracks.length; i++) {
-      let trackName = discogs.tracks[i].name.toUpperCase();
-      if (trackName == compareName || trackName.includes(compareName) || compareName.includes(trackName)) {
-        score+=10;
-        break;
+      const compareName = compare.name.toUpperCase();
+      for (let  i= 0; i < discogs.tracks.length; i++) {
+        let trackName = discogs.tracks[i].name.toUpperCase();
+        if (trackName == compareName || trackName.includes(compareName) || compareName.includes(trackName)) {
+          score+=10;
+          break;
+        }
       }
-    }
-    if (discogsNbSameWords + compareNbSameWords == 0) {
-      score-=40;
-    } else {
-      const deltaDiscogs = Math.abs(discogsNbWords - discogsNbSameWords);
-      const deltaCompare = Math.abs(compareNbWords - compareNbSameWords);
-      score+= (discogsNbWords-deltaDiscogs)/discogsNbWords * 20; // check the number of same word in the album name => 25%
-      score+= (compareNbWords-deltaCompare)/compareNbWords * 25; // check the number of same word in the album name => 25%
+      if (discogsNbSameWords + compareNbSameWords == 0) score-=40;
+      else {
+        const deltaDiscogs = Math.abs(discogsNbWords - discogsNbSameWords);
+        const deltaCompare = Math.abs(compareNbWords - compareNbSameWords);
+        score+= (discogsNbWords-deltaDiscogs)/discogsNbWords * 20; // check the number of same word in the album name => 25%
+        score+= (compareNbWords-deltaCompare)/compareNbWords * 25; // check the number of same word in the album name => 25%
+      }
     }
   }
 
   //fs.appendFileSync(__dirname+"/res/"+filename, "same name = " + score +"\n" , 'utf-8')
-
-  if (discogs.album.release_date === compare.updated_at) {
-    score+= 20;
-  }
-  else if (discogs.album.release_date && compare.updated_at) { // check the release date => 40%
-    const maxMonth = 24;
-    const diffMonth = Math.abs(moment(discogs.album.release_date).diff(moment(compare.updated_at), 'months'));
-    if (diffMonth < maxMonth) {
-      score+= (maxMonth-diffMonth)/maxMonth * 15;
-    } else {
-      // score -= 10;
+  if (discogs.album.release_date && compare.updated_at) {
+    if (discogs.album.release_date === compare.updated_at) score+= 20;
+    else if (discogs.album.release_date && compare.updated_at) { // check the release date => 40%
+      const maxMonth = 24;
+      const diffMonth = Math.abs(moment(discogs.album.release_date).diff(moment(compare.updated_at), 'months'));
+      if (diffMonth < maxMonth) score+= (maxMonth-diffMonth)/maxMonth * 15;
+      // else score -= 10;
     }
   }
 
@@ -606,12 +634,8 @@ function compareAlbums(discogs, compare, nbAlbumsToCompare) {
     }
 
     if (discogsNbSameArtist + compareNbSameArtist === 0) {
-      if ( compare.artists.map(a=>a.name) == 'Various Artists'
-        || discogs.album.artists.map(a=>a.name) == 'Various Artists') {
-        score+=20;
-      } else {
-        score-=30;
-      }
+      if ( compare.artists.map(a=>a.name) == 'Various Artists' || discogs.album.artists.map(a=>a.name) == 'Various Artists') score+=20;
+      else score-=30;
     } else {
       const discogsDelta = Math.abs(discogsArtists.length - discogsNbSameArtist);
       const compareDelta = Math.abs(compareArtists.length - compareNbSameArtist);
@@ -619,9 +643,8 @@ function compareAlbums(discogs, compare, nbAlbumsToCompare) {
       score+= (discogsArtists.length-discogsDelta)/discogsArtists.length * 20; // check the number of same word in the artist name => 20%
       score+= (compareArtists.length-compareDelta)/compareArtists.length * 15; // check the number of same word in the artist name => 20%
     }
-  } else {
-    score -= 30;
   }
+  else score -= 30;
 
   //fs.appendFileSync(__dirname+"/res/"+filename, "same artists (final score) = " + score +"\n" , 'utf-8')
 
@@ -675,11 +698,8 @@ function compareTracks(discogs, compare, nbTracksToCompare) {
     fs.appendFileSync(filename, '\nMatch ?!\n', 'utf-8')
 
     let discogsTrackArtists = [];
-    if (discogsTrack.artists.length > 0) {
-    discogsTrackArtists = discogsTrack.artists.map(a => utils.removeParentheses(a.name.toUpperCase()));
-    } else {
-      discogsTrackArtists = discogsArtists;
-    }
+    if (discogsTrack.artists.length > 0) discogsTrackArtists = discogsTrack.artists.map(a => utils.removeParentheses(a.name.toUpperCase()));
+    else discogsTrackArtists = discogsArtists;
 
     let findSameTrack = compareTracks.find(item => {
       return (diffTime(item.duration, discogsTrack.duration) < 10 || !discogsTrack.duration) &&
