@@ -5,6 +5,7 @@ const passport_access = require('passport');
 const passport_refresh = require('passport');
 const utils = require('./utils');
 const morgan = require('morgan');
+const moment = require('moment');
 const cookieParser = require('cookie-parser');
 
 // Database
@@ -44,6 +45,12 @@ app.use(cors(corsOptions));
 // Ease to parse cookies
 app.use(cookieParser());
 
+// Quick fonction to print connection details
+app.use((req, res, next) => {
+  console.log('New connection from ' + req.connection.remoteAddress + ' at ' + moment().toString());
+  next();
+})
+
 // Routes
 const authRoutes = require('./api/routes/auth')
 const usersRoutes = require('./api/routes/users')
@@ -58,7 +65,6 @@ const refreshTokenMiddleware = require('./api/middleware/addRefreshToken');
 const globalSpotifyMiddleware = require('./api/middleware/globalSpotify');
 
 app.use('/auth', authRoutes);
-
 app.use(passportMiddleware);
 app.use(refreshTokenMiddleware);
 

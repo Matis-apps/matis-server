@@ -7,7 +7,7 @@ const utils = require('../../utils');
 const CALL_LIMIT = 50; // Limit of items to retrieve
 const RETRY_LIMIT = 10; // Limit number of retry
 const RETRY_TIMEOUT = 1800; // Limit number of retry
-const DIE_TIMEOUT = 10000;
+const DIE_TIMEOUT = 15000;
 
 /**
  * httpsCall Call the API end parse de response
@@ -16,7 +16,7 @@ const DIE_TIMEOUT = 10000;
 const httpsCall = async function(options) {
   return new Promise((resolve, reject) => {
     console.info('** REQUEST ** : ' + options.hostname + options.path);
-    setTimeout(() => reject(utils.error('Spotify : Timeout after 10s', 408)), DIE_TIMEOUT);
+    setTimeout(() => reject(utils.error('Spotify : Timeout after 15s', 408)), DIE_TIMEOUT);
     var req = https.get(options, response => {
       // Event when receiving the data
       var responseBody = "";

@@ -43,7 +43,7 @@ function registerDeezer(req, code) {
 
     const host = "https://connect.deezer.com";
     const path = "/oauth/access_token.php?app_id="+ process.env.DEEZER_APP_ID +"&secret="+ process.env.DEEZER_SECRET +"&code=" + code + "&output=json";
-    
+
     await https.get(host + path, response => {
       // Event when receiving the data
       var responseBody = "";
@@ -89,11 +89,11 @@ function saveDeezer(req, json) {
 
     if (me) {
       const query = { _id: req.user._id };
-      const update = { 
+      const update = {
         deezer: {
           account: me,
           token: json,
-        } 
+        }
       };
       const options = { new: true, upsert: true, useFindAndModify: false };
 
@@ -172,11 +172,11 @@ function saveSpotify(req, json) {
     const me = await spotifyMe(json.access_token);
     if (me) {
       const query = { _id: req.user._id };
-      const update = { 
+      const update = {
         spotify: {
           account: me,
           token: json,
-        } 
+        }
       };
       const options = { new: true, upsert: true, useFindAndModify: false };
       await User.findOneAndUpdate(query, update, options)
@@ -215,7 +215,7 @@ function requestTokenDiscogs(req) {
         'User-Agent': 'API/Matis'
       },
     };
-    
+
     const request = https.request(options, response => {
       // Event when receiving the data
       var responseBody = "";
@@ -278,8 +278,6 @@ function registerDiscogs(req, token, verify) {
       },
     };
 
-    console.log(options)
-
     const request = https.request(options, response => {
       // Event when receiving the data
       var responseBody = "";
@@ -287,9 +285,6 @@ function registerDiscogs(req, token, verify) {
 
       // Event when the request is ending
       response.on('end', async () => {
-        console.log('registerDiscogs responseBody')
-        console.log(responseBody)
-
         try {
           if (response.statusCode === 200) {
             let responseArray = responseBody.split('&');
@@ -321,11 +316,7 @@ function saveDiscogs(id, oauth_token, oauth_token_secret) {
   return new Promise(async (resolve, reject) => {
     try {
       const identity = await discogsIdentity(oauth_token, oauth_token_secret);
-      console.log('identity')
-      console.log(identity)
       const me = await discogsMe(oauth_token, oauth_token_secret, identity.username);
-      console.log('me')
-      console.log(me)
 
       if (me) {
         const query = { _id: id };
@@ -333,7 +324,7 @@ function saveDiscogs(id, oauth_token, oauth_token_secret) {
           discogs: {
             account: me,
             token: {oauth_token, oauth_token_secret},
-          } 
+          }
         };
         const options = { new: true, upsert: true, useFindAndModify: false };
         await User.findOneAndUpdate(query, update, options)

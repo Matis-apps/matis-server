@@ -13,7 +13,7 @@ const RETRY_TIMEOUT = 1800; // Limit number of retry
 
 var STACK_TIMEOUT = 0;
 const STACK_TIMEOUT_INTERVAL = 1000;
-const DIE_TIMEOUT = 10000;
+const DIE_TIMEOUT = 15000;
 
 const incrementStackTimeout = () => STACK_TIMEOUT+=STACK_TIMEOUT_INTERVAL;
 const decrementStackTimeout = () => STACK_TIMEOUT = STACK_TIMEOUT > STACK_TIMEOUT_INTERVAL ? STACK_TIMEOUT-=STACK_TIMEOUT_INTERVAL : STACK_TIMEOUT_INTERVAL;
@@ -33,7 +33,7 @@ const httpsCall = async function(options) {
 
     let calling = () => {
       console.info('** REQUEST ** : ' + options.hostname + options.path);
-      setTimeout(() => reject(utils.error('Discogs : Timeout after 10s', 408)), DIE_TIMEOUT);
+      setTimeout(() => reject(utils.error('Discogs : Timeout after 15s', 408)), DIE_TIMEOUT);
       https.get(options, response => {
         // Event when receiving the data
         var responseBody = "";

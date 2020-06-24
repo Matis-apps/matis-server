@@ -6,7 +6,7 @@ const utils = require('../../utils');
 const CALL_LIMIT = 100; // Limit of items to retrieve
 const RETRY_LIMIT = 8; // Limit number of retry
 const RETRY_TIMEOUT = 1800; // Limit number of retry
-const DIE_TIMEOUT = 10000; // Limit number of retry
+const DIE_TIMEOUT = 15000; // Limit number of retry
 
 /**
  * httpsCall Call the API end parsel de response
@@ -15,7 +15,7 @@ const DIE_TIMEOUT = 10000; // Limit number of retry
 function httpsCall(options) {
   return new Promise((resolve, reject) => {
     console.info('** REQUEST ** : ' + options.hostname + options.path);
-    setTimeout(() => reject(utils.error('Deezer : Timeout after 10s', 408)), DIE_TIMEOUT);
+    setTimeout(() => reject(utils.error('Deezer : Timeout after 15s', 408)), DIE_TIMEOUT);
     var req = https.get(options, response => {
       // Event when receiving the data
       var responseBody = "";

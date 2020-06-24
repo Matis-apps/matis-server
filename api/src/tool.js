@@ -392,7 +392,7 @@ async function dispatchCompatibilityDiscogs(spotify_token, releases) {
 
     await utils.asyncForEach(searchCollection, async (item) => {
       const discogsItem = item.discogs;
-      console.log(discogsItem.album.name)
+      //console.log(discogsItem.album.name)
       fs.appendFileSync(filenameAlbumScore, discogsItem.album.name + "\n");
       // Deezer bloc
       let deezerCompatibility = new Promise(async(resolve, reject) => {
