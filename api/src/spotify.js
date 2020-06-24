@@ -620,7 +620,7 @@ async function getReleaseContent(access_token, obj, id) {
     if(obj === 'album') {
       var album = await fetchAlbum(access_token, id);
       album = formatAlbumToFeed(album);
-      if (album && album.artists) return album;
+      if (album) return album;
       else throw utils.error('No album', 404);
     } else if (obj === 'playlist') {
       var playlist = await fetchPlaylist(access_token, id);

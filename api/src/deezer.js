@@ -571,7 +571,8 @@ async function getReleaseContent(access_token, obj, id) {
   try {
     if(obj === 'album') {
       var album = await fetchAlbum(access_token, id);
-      if (album) return formatAlbumToFeed(album);
+      album = formatAlbumToFeed(album);
+      if (album) return album;
       else throw utils.error('No album', 404);
     } else if (obj === 'playlist') {
       var playlist = await fetchPlaylist(access_token, id);
