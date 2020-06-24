@@ -490,7 +490,7 @@ async function getPlaylistArtistRelease(access_token, id) {
 
     return newReleases
       .map(release => formatArtistToFeed(release))
-      .map(filter => !!release)
+      .filter(release => !!release)
       .sort((a,b) => sortLastReleases(a,b));
   } catch (err) {
     return Promise.reject(err);
