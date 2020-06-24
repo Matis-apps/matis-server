@@ -366,8 +366,8 @@ async function getRelatedArtists(access_token, id) {
     var relatedArtistsList = await fetchRelatedArtists(access_token, id);
     var relatedArtists = await Promise.all(relatedArtistsList.data.map(artist => fetchArtist(access_token, artist.id).catch(err => console.log(err))));
     return relatedArtists
-      .filter(artist => artist && artist.albums && artist.albums.length > 0)
       .map(artist => formatArtistToFeed(artist))
+      .filter(artist => !!artist)
       .sort((a,b) => sortLastReleases(a,b));
   } catch (err) {
     return Promise.reject(err);
@@ -434,8 +434,8 @@ async function getMyReleases(access_token, user_id) {
     Array.prototype.push.apply(
       releases,
       artistsDetails
-        .filter(artist => artist && artist.albums && artist.albums.length > 0)
         .map(artist => formatArtistToFeed(artist))
+        .filter(artist => !!artist)
     )
   }
 
@@ -489,8 +489,8 @@ async function getPlaylistArtistRelease(access_token, id) {
     var newReleases = await Promise.all(artists.map(i => fetchArtist(access_token, i.id).catch(err => console.log(err))));
 
     return newReleases
-      .filter(release => release && release.albums && release.albums.length > 0)
       .map(release => formatArtistToFeed(release))
+      .map(filter => !!release)
       .sort((a,b) => sortLastReleases(a,b));
   } catch (err) {
     return Promise.reject(err);
@@ -512,8 +512,8 @@ async function getReleases(access_token, user_id) {
     Array.prototype.push.apply(
       releases,
       artistsDetails
-        .filter(artist => artist && artist.albums && artist.albums.length > 0)
         .map(artist => formatArtistToFeed(artist))
+        .filter(artist => !!artist)
     )
   }
 

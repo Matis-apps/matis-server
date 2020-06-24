@@ -357,8 +357,8 @@ async function getPlaylistArtistRelease(access_token, id) {
     })
     var newReleases = await Promise.all(artists.map(i => fetchArtist(access_token, i.id).catch(err => { throw err; })))
     return [... new Set(newReleases)]
-      .filter(release => release && release.albums && release.albums.length > 0)
       .map(release => formatArtistToFeed(release))
+      .filter(release => !!release)
       .sort((a,b) => sortLastReleases(a,b));
   } catch (err) {
     return Promise.reject(err);
@@ -374,8 +374,9 @@ async function getRelatedArtists(access_token, id) {
     var relatedArtistsList = await fetchRelatedArtists(access_token, id).catch(err => { throw err });
     var relatedArtists = await Promise.all(relatedArtistsList.artists.map(artist => fetchArtist(access_token, artist.id).catch(err => console.log(err))));
     return relatedArtists
-      .filter(artist => artist && artist.albums && artist.albums.length > 0)
-      .map(artist => formatArtistToFeed(artist));
+      .map(artist => formatArtistToFeed(artist))
+      .filter(artist => !!artist)
+      .sort((a,b) => sortLastReleases(a,b));
   } catch (err) {
     return Promise.reject(err);
   }
@@ -549,14 +550,16 @@ async function getMyReleases(access_token, username) {
     Array.prototype.push.apply(
       releases,
       artistsDetails
-        .filter(artist => artist && artist.albums && artist.albums.length > 0)
         .map(artist => formatArtistToFeed(artist))
+        .filter(artist => !!artist)
     );
   }
 
   var genres = [];
   if(releases && releases.length > 0) {
     var availableGenres = [];
+    //console.log(releases)
+
     releases.forEach(i => {
       Array.prototype.push.apply(availableGenres, i.content.genre.split(':'))
     })
@@ -616,7 +619,8 @@ async function getReleaseContent(access_token, obj, id) {
   try {
     if(obj === 'album') {
       var album = await fetchAlbum(access_token, id);
-      if (album) return formatAlbumToFeed(album);
+      album = formatAlbumToFeed(album);
+      if (album && album.artists) return album;
       else throw utils.error('No album', 404);
     } else if (obj === 'playlist') {
       var playlist = await fetchPlaylist(access_token, id);
@@ -752,37 +756,39 @@ function formatUserToStandard(user){
 // FORMAT TO FEED (RELEASE) //
 //////////////////////////////
 function formatArtistToFeed(artist){
-  if (artist.albums && artist.albums.length > 0 && artist.albums.artists && artist.albums.artists.length > 0) {
+  if (artist.albums && artist.albums.length > 0) {
     const firstAlbum = artist.albums[0];
-    const firstArtistAlbum = artist.albums[0].artists[0];
-    return {
-      _obj: 'album',
-      _from: 'spotify',
-      _uid: 'spotify-'+firstAlbum.album_type+'-'+artist.id+'-'+artist.albums[0].id,
-      // Related to the author
-      author: {
-        id: firstArtistAlbum.id,
-        name: firstArtistAlbum.name,
-        picture:
-        firstArtistAlbum.images && firstArtistAlbum.images.length > 0 ? firstArtistAlbum.images[0].url : firstAlbum.images[0] ? firstAlbum.images[0].url : null,
-        link: firstArtistAlbum.external_urls.spotify ? firstArtistAlbum.external_urls.spotify :  "https://open.spotify.com/artist/"+artist.id,
-        added_at: null,
-      },
-      // Related to the content
-      content: {
-        id: firstAlbum.id,
-        title: firstAlbum.name,
-        description: 'Based on your feed with ' + artist.name,
-        type: firstAlbum.album_type,
-        picture: firstAlbum.images[0] ? firstAlbum.images[0].url : null,
-        link: firstAlbum.external_urls.spotify,
-        upc: firstAlbum.upc || null,
-        genre: artist.genres ? artist.genres.join(':') : '',
-        updated_at: firstAlbum.release_date,
-        //last: artist.albums[0],
+    if (firstAlbum.artists && firstAlbum.artists.length > 0) {
+      const firstArtistAlbum = artist.albums[0].artists[0];
+        return {
+          _obj: 'album',
+          _from: 'spotify',
+          _uid: 'spotify-'+firstAlbum.album_type+'-'+artist.id+'-'+artist.albums[0].id,
+          // Related to the author
+          author: {
+            id: firstArtistAlbum.id,
+            name: firstArtistAlbum.name,
+            picture:
+            firstArtistAlbum.images && firstArtistAlbum.images.length > 0 ? firstArtistAlbum.images[0].url : firstAlbum.images[0] ? firstAlbum.images[0].url : null,
+            link: firstArtistAlbum.external_urls.spotify ? firstArtistAlbum.external_urls.spotify :  "https://open.spotify.com/artist/"+artist.id,
+            added_at: null,
+          },
+          // Related to the content
+          content: {
+            id: firstAlbum.id,
+            title: firstAlbum.name,
+            description: 'Based on your feed with ' + artist.name,
+            type: firstAlbum.album_type,
+            picture: firstAlbum.images[0] ? firstAlbum.images[0].url : null,
+            link: firstAlbum.external_urls.spotify,
+            upc: firstAlbum.upc || null,
+            genre: artist.genres ? artist.genres.join(':') : '',
+            updated_at: firstAlbum.release_date,
+            //last: artist.albums[0],
+          }
+        };
       }
-    };
-  }
+    }
   return;
 }
 
