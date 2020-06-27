@@ -948,7 +948,7 @@ function formatUserToStandard(user){
 // FORMAT TO FEED (RELEASE) //
 //////////////////////////////
 function formatArtistToFeed(artist){
-  if (artist.albums && artist.albums.length > 0) {
+  if (artist && artist.albums && artist.albums.length > 0) {
     const firstAlbum = artist.albums[0];
     return {
       _obj: 'album',

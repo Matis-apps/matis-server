@@ -756,7 +756,7 @@ function formatUserToStandard(user){
 // FORMAT TO FEED (RELEASE) //
 //////////////////////////////
 function formatArtistToFeed(artist){
-  if (artist.albums && artist.albums.length > 0) {
+  if (artist && artist.albums && artist.albums.length > 0) {
     const firstAlbum = artist.albums[0];
     if (firstAlbum.artists && firstAlbum.artists.length > 0) {
       const firstArtistAlbum = artist.albums[0].artists[0];
@@ -793,7 +793,7 @@ function formatArtistToFeed(artist){
 }
 
 function formatAlbumToFeed(album) {
-  if (album.artists && album.artists.length > 0) {
+  if (album && album.artists && album.artists.length > 0) {
     const mainArtist = album.artists[0];
     return {
       _obj: 'album',
