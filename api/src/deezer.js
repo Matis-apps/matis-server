@@ -631,7 +631,7 @@ async function getSocialFriends(user_id, access_token) {
     }
 
     const followings = await fetchFollowings(user_id, access_token).catch(err => {throw err});
-    if (followings && following.length > 0) {
+    if (followings && followings.length > 0) {
       social.followings = followings.map(i => formatUserToStandard(i)).sort((a,b) => sortFriends(a,b));
     }
     return social;
