@@ -627,12 +627,12 @@ async function getSocialFriends(user_id, access_token) {
     };
     const followers = await fetchFollowers(user_id, access_token).catch(err => {throw err});
     if (followers && followers.length ) {
-      social.followers = response.map(i => formatUserToStandard(i)).sort((a,b) => sortFriends(a,b));
+      social.followers = followers.map(i => formatUserToStandard(i)).sort((a,b) => sortFriends(a,b));
     }
 
     const followings = await fetchFollowings(user_id, access_token).catch(err => {throw err});
     if (followings && following.length > 0) {
-      social.followings = response.map(i => formatUserToStandard(i)).sort((a,b) => sortFriends(a,b));
+      social.followings = followings.map(i => formatUserToStandard(i)).sort((a,b) => sortFriends(a,b));
     }
     return social;
   } catch(err) {
