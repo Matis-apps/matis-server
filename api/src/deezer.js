@@ -938,7 +938,7 @@ function formatUserToStandard(user){
     // Related to the author
     id: user.id,
     name: user.name,
-    profile: user.link,
+    profile: user.link||"https://www.deezer.com/profile/"+user.id,
     fullname: user.firstname && user.lastname ? user.firstname + ' ' + user.lastname : null,
     picture: user.picture,
   };

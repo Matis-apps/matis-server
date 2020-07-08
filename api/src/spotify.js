@@ -172,6 +172,16 @@ async function fetchSearch(access_token, type, query, strict) {
   });
 }
 
+async function fetchUserProfile(access_token, username) {
+  return new Promise((resolve, reject) => {
+    const path = '/v1/users/'+encodeURIComponent(username);
+    genericHttps(access_token, path)
+      .then(result => resolve(result))
+      .catch(error => reject(error));
+  });
+}
+
+
 
 async function fetchPlaylists(access_token) {
   return new Promise((resolve, reject) => {
@@ -383,7 +393,7 @@ async function getRelatedArtists(access_token, id) {
 }
 
 async function getSearch(access_token, query, types = "*", strict = false) {
-  const allowedTypes = ['artist', 'album', 'playlist', 'track'];
+  const allowedTypes = ['artist', 'album', 'playlist', 'track', 'user'];
   var search_types = [];
   var results = new Object;
   var error = null;
@@ -396,35 +406,42 @@ async function getSearch(access_token, query, types = "*", strict = false) {
 
   if (search_types.length > 0) {
     await utils.asyncForEach(search_types, async (type) => {
-      await fetchSearch(access_token, type, query, strict)
-        .then(async (result) => {
-          var itemMainKey = Object.keys(result)[0];
-          if (strict && result[itemMainKey].items) result[itemMainKey].items = result[itemMainKey].items.filter(item => query.toUpperCase().includes(item.name.toUpperCase()));
-          switch(type) {
-            case 'artist':
-              results.artists = result.artists.items.map(i => formatArtistToStandard(i));
-              break;
-            case 'album':
-              await Promise
-                .all(result.albums.items.map(i => fetchAlbum(access_token, i.id).catch(err => error = err)))
-                .then(albums => {
-                  results.albums = albums.map(i => formatAlbumToStandard(i));
-                })
-                .catch(err => error = err);
-              break;
-            case 'playlist':
-              results.playlists = result.playlists.items.map(i => formatPlaylistToStandard(i));
-              break;
-            case 'track':
-              await Promise
-                .all(result.tracks.items.map(i => fetchTrack(access_token, i.id).catch(err => error = err)))
-                .then(tracks => {
-                  results.tracks = tracks.map(i => formatTrackToStandard(i));
-                }).catch(err => error = err);
-              break;
-          }
-        })
-        .catch(err => error = err)
+      if (type === 'user') {
+        await fetchUserProfile(access_token, query)
+          .then(result => {
+            if (result) results.users = [ formatUserToStandard(result) ];
+          })
+      } else {
+        await fetchSearch(access_token, type, query, strict)
+          .then(async (result) => {
+            var itemMainKey = Object.keys(result)[0];
+            if (strict && result[itemMainKey].items) result[itemMainKey].items = result[itemMainKey].items.filter(item => query.toUpperCase().includes(item.name.toUpperCase()));
+            switch(type) {
+              case 'artist':
+                results.artists = result.artists.items.map(i => formatArtistToStandard(i));
+                break;
+              case 'album':
+                await Promise
+                  .all(result.albums.items.map(i => fetchAlbum(access_token, i.id).catch(err => error = err)))
+                  .then(albums => {
+                    results.albums = albums.map(i => formatAlbumToStandard(i));
+                  })
+                  .catch(err => error = err);
+                break;
+              case 'playlist':
+                results.playlists = result.playlists.items.map(i => formatPlaylistToStandard(i));
+                break;
+              case 'track':
+                await Promise
+                  .all(result.tracks.items.map(i => fetchTrack(access_token, i.id).catch(err => error = err)))
+                  .then(tracks => {
+                    results.tracks = tracks.map(i => formatTrackToStandard(i));
+                  }).catch(err => error = err);
+                break;
+            }
+          })
+          .catch(err => error = err)
+      }
     })
   } else {
     error = utils.error("Bad t paramater", 400)
