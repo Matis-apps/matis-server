@@ -415,7 +415,7 @@ async function getSearch(access_token, query, types = "*", strict = false) {
         await fetchSearch(access_token, type, query, strict)
           .then(async (result) => {
             var itemMainKey = Object.keys(result)[0];
-            if (strict && result[itemMainKey].items) result[itemMainKey].items = result[itemMainKey].items.filter(item => query.toUpperCase().includes(item.name.toUpperCase()));
+            if (strict === true && result[itemMainKey].items) result[itemMainKey].items = result[itemMainKey].items.filter(item => query.toUpperCase().includes(item.name.toUpperCase()));
             switch(type) {
               case 'artist':
                 results.artists = result.artists.items.map(i => formatArtistToStandard(i));

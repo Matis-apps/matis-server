@@ -54,10 +54,11 @@ router.get('/search', (req, res, next) => {
     next(utils.error("No user provided", 400));
   } else {
     const query = req.query.q;
+    const types = req.query.t || '*';
     const user = req.user;
     const spotify_token = req.spotify_token;
 
-    tool.crossSearch(spotify_token, query).then(data => {
+    tool.crossSearch(spotify_token, query, types).then(data => {
       res.status(200).json({
         'data': data,
       })

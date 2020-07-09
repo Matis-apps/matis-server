@@ -47,7 +47,8 @@ app.use(cookieParser());
 
 // Quick fonction to print connection details
 app.use((req, res, next) => {
-  console.log('New connection from ' + req.connection.remoteAddress + ' at ' + moment().toString());
+  const client_ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+  console.log('New connection from ' + client_ip + ' at ' + moment().toString());
   next();
 })
 

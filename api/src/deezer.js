@@ -646,6 +646,7 @@ async function getSearch(query, types = "*", strict = false) {
   var results = new Object;
   var error;
 
+
   if (types == "*") {
     search_types = allowedTypes;
   } else {
@@ -660,7 +661,7 @@ async function getSearch(query, types = "*", strict = false) {
     await utils.asyncForEach(search_types, async (type) => {
       await fetchSearch(type, query, strict)
         .then(async (result) => {
-          if (strict && result.data) {
+          if (strict === true && result.data) {
             result.data = result.data.filter(item => query.toUpperCase().includes(item.name ? item.name.toUpperCase() : item.title.toUpperCase()));
           }
           switch(type) {

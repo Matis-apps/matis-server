@@ -89,13 +89,13 @@ function crossTrackISRC (spotify_token, fromPlateform, query, isrc) {
 }
 
 
-function crossSearch (spotify_token, query) {
+function crossSearch (spotify_token, query, types) {
   return new Promise(async (resolve, reject) => {
     var plateforms = new Object;
     var hasResults = false;
     var error = null;
 
-    const deezerResult = await deezer.getSearch(query)
+    const deezerResult = await deezer.getSearch(query, types)
       .then(result => {
         plateforms.deezer = result;
         hasResults = true;
@@ -103,7 +103,7 @@ function crossSearch (spotify_token, query) {
       .catch(err => error = err);
 
     if (spotify_token) {
-      const spotifyResult = await spotify.getSearch(spotify_token, query)
+      const spotifyResult = await spotify.getSearch(spotify_token, query, types)
         .then(result => {
           plateforms.spotify = result;
           hasResults = true;
