@@ -56,4 +56,30 @@ router.get('/token/discogs', (req, res, next) => {
   }
 });
 
+router.post('/following', (req, res, next) => {
+  const user = req.user;
+  const following = req.body.following;
+  if (!user) {
+    next(utils.error("Not authenticated", 401));
+  } else if (!following) {
+    next(utils.error("No user to follow", 400));
+  } else {
+    users.addFollowingToUser(user, following)
+      .then(() => res.status(200).end())
+      .catch(err => next(err));
+  }
+})
+
+router.get('/followings', (req, res, next) => {
+  const user = req.user;
+  if (!user) {
+    next(utils.error("Not authenticated", 401));
+  } else {
+    users.getUserFollowing(user)
+      .then(followings => {
+        res.status(200).json({ followings })
+      }).catch(err => next(err));
+  }
+})
+
 module.exports = router;

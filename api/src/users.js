@@ -341,8 +341,41 @@ function saveDiscogs(id, oauth_token, oauth_token_secret) {
   })
 }
 
+async function addFollowingToUser(user, following) {
+  const existingFollowing = user.follow.find(userFollowing => {
+    return userFollowing._from === following._from && userFollowing.id === following.id
+  });
+
+  if (!existingFollowing) {
+    const mongoUser = await User.findOne({_id: user._id});
+    if (mongoUser) {
+      mongoUser.follow.push(following)
+      mongoUser.save();
+      if (mongoUser.follow.map(f => f._uid).includes(following._uid)) {
+        return mongoUser;
+      } else {
+        return Promise.reject(utils.error("Cannot save the new following", 500));
+      }
+    } else {
+      return Promise.reject(utils.error("Cannot find the current user", 500));
+    }
+  } else {
+    return Promise.reject(utils.error("The user already follow this guy", 409));
+  }
+}
+
+async function getUserFollowing(user) {
+  if (user == null) {
+    return Promise.reject(utils.error("Cannot find the current user", 500));
+  } else {
+    return user.follow;
+  }
+}
+
 exports.me = me;
 exports.registerDeezer = registerDeezer;
 exports.registerSpotify = registerSpotify;
 exports.requestTokenDiscogs = requestTokenDiscogs;
 exports.registerDiscogs = registerDiscogs;
+exports.addFollowingToUser = addFollowingToUser;
+exports.getUserFollowing = getUserFollowing;
